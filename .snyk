@@ -1,0 +1,17 @@
+ignore:
+  'snyk:lic:pip:enum-tools:LGPL-3.0':
+    - '*':
+        reason: No fix available
+        expires: 2022-06-01T12:00:00.000Z
+  'snyk:lic:pip:cssutils:LGPL-3.0':
+    - '*':
+        reason: No fix available
+        expires: 2022-06-01T12:00:00.000Z
+  'snyk:lic:pip:certifi:MPL-2.0':
+    - '*':
+        reason: No fix available
+        expires: 2022-06-01T12:00:00.000Z
+  'snyk:lic:pip:apeye:LGPL-3.0':
+    - '*':
+        reason: No fix available
+        expires: 2022-06-01T12:00:00.000Z

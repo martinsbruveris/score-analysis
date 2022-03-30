@@ -31,6 +31,8 @@ isort = "*"
 jupyter = "*"
 pre-commit = "*"
 pytest = "*"
+pytest-black = "*"
+pytest-cov = "*"
 pytest-xdist = "*"
 taskipy = "*"
 

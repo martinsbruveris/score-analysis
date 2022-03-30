@@ -214,9 +214,8 @@ class ConfusionMatrix:
             matrix[..., j, 1, 0] = (
                 np.sum(self.matrix[..., :, j], axis=-1) - matrix[..., j, 0, 0]
             )
-            matrix[..., j, 1, 1] = (
-                np.sum(self.matrix, axis=(-1, -2))
-                - np.sum(matrix[..., j, :, :], axis=(-1, -2))
+            matrix[..., j, 1, 1] = np.sum(self.matrix, axis=(-1, -2)) - np.sum(
+                matrix[..., j, :, :], axis=(-1, -2)
             )
         return BinaryConfusionMatrix(matrix=matrix)
 

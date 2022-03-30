@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from score_analysis.cm import ConfusionMatrix, BinaryConfusionMatrix
+from score_analysis.cm import BinaryConfusionMatrix, ConfusionMatrix
 
 
 def test_from_predictions():
@@ -42,7 +42,7 @@ def test_from_nested_dicts():
 def test_from_nested_dicts_reorder():
     cm = ConfusionMatrix(
         matrix={0: {0: 3, 1: 0, 2: 0}, 1: {0: 0, 1: 1, 2: 2}, 2: {0: 2, 1: 1, 2: 3}},
-        classes=[2, 1, 0]
+        classes=[2, 1, 0],
     )
     np.testing.assert_equal(cm.classes, [2, 1, 0])
     np.testing.assert_equal(cm.matrix, [[3, 1, 2], [2, 1, 0], [0, 0, 3]])
@@ -61,7 +61,7 @@ def test_from_dataframe_reorder():
     data = [[0, 2, 1], [3, 0, 0], [2, 3, 1]]
     cm = ConfusionMatrix(
         matrix=pd.DataFrame(data=data, index=[1, 0, 2], columns=[0, 2, 1]),
-        classes=[2, 1, 0]
+        classes=[2, 1, 0],
     )
 
     np.testing.assert_equal(cm.classes, [2, 1, 0])

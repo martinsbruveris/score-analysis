@@ -59,7 +59,7 @@ def test_cm_at_threshold(pos, neg, threshold, score_class, equal_class, expected
         # Simple scalar version
         [[0, 1, 2, 3], [0, 1, 2], 1.5, 0.5],
         # Vectorized version
-        [[0, 1, 2, 3], [], [-1, 0, 1.5, 3, 4], [1., 1., 0.5, 0.25, 0.]],
+        [[0, 1, 2, 3], [], [-1, 0, 1.5, 3, 4], [1.0, 1.0, 0.5, 0.25, 0.0]],
     ],
 )
 def test_tpr_at_threshold(pos, neg, threshold, expected):
@@ -124,13 +124,13 @@ def test_threshold_setting(scores, ratio, score_class, equal_class):
 
     # FNR
     score_obj = Scores(scores, [], score_class=score_class, equal_class=equal_class)
-    threshold = score_obj.threshold_at_fnr(1. - np.asarray(ratio))
+    threshold = score_obj.threshold_at_fnr(1.0 - np.asarray(ratio))
     np.testing.assert_allclose(threshold, expected, atol=1e-10)
 
     # TNR
     reverse_class = "neg" if equal_class == "pos" else "pos"
     score_obj = Scores([], scores, score_class=score_class, equal_class=reverse_class)
-    threshold = score_obj.threshold_at_tnr(1. - np.asarray(ratio))
+    threshold = score_obj.threshold_at_tnr(1.0 - np.asarray(ratio))
     np.testing.assert_allclose(threshold, expected, atol=1e-10)
 
     # FPR

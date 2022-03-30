@@ -20,7 +20,7 @@ class Scores:
         neg,
         *,
         score_class: Union[BinaryLabel, str] = "pos",
-        equal_class: Union[BinaryLabel, str] = "pos"
+        equal_class: Union[BinaryLabel, str] = "pos",
     ):
         """
         Args:
@@ -185,16 +185,16 @@ class Scores:
         # We transform non-increasing metrics into increasing ones. Note that this does
         # not change continuity.
         if not increasing:
-            target_ratio = 1. - target_ratio
+            target_ratio = 1.0 - target_ratio
         # And we transform the score direction as well
         if self.score_class != BinaryLabel.pos:
-            target_ratio = 1. - target_ratio
+            target_ratio = 1.0 - target_ratio
             left_continuous = not left_continuous
         # From here on, we can pretend to be in the standard case, i.e., calculate
         # thresholds based on an increasing metric
 
         if not left_continuous:
-            min_ratio = 1. / len(scores)
+            min_ratio = 1.0 / len(scores)
             target_ratio = target_ratio - min_ratio
         target = target_ratio * len(scores)
 
@@ -210,8 +210,8 @@ class Scores:
         threshold = np.asarray(threshold)  # We need this when target_ratio is scalar
 
         # Special cases of TPR <= 0. and TPR >= 1.
-        threshold[target_ratio <= 0.] = np.nextafter(scores[0], -np.inf)
-        threshold[target_ratio >= 1.] = np.nextafter(scores[-1], np.inf)
+        threshold[target_ratio <= 0.0] = np.nextafter(scores[0], -np.inf)
+        threshold[target_ratio >= 1.0] = np.nextafter(scores[-1], np.inf)
 
         if np.isscalar(threshold):
             threshold = threshold.item()

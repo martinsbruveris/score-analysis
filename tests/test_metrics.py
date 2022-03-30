@@ -37,7 +37,7 @@ from score_analysis import metrics
         [[[0, 0], [0, 0]], np.nan, True, metrics.fpr],  # Nans
         [[[[0, 0], [1, 3]]], [0.25], False, metrics.fpr],  # Vectorized
         [[[[[0, 0], [0, 0]]]], [[np.nan]], False, metrics.fpr],  # Vectorized nans
-    ]
+    ],
 )
 def test_metric(matrix, expected, isscalar, func):
     matrix = np.asarray(matrix)

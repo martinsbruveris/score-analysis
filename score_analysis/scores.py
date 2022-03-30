@@ -68,7 +68,7 @@ class Scores:
         neg = scores[labels != pos_label]
         return Scores(pos, neg, score_class=score_class, equal_class=equal_class)
 
-    def cm_at_threshold(self, threshold) -> BinaryConfusionMatrix:
+    def cm(self, threshold) -> BinaryConfusionMatrix:
         """
         Computes confusion matrices at the given threshold(s).
 
@@ -106,23 +106,23 @@ class Scores:
 
         return BinaryConfusionMatrix(matrix=matrix)
 
-    confusion_matrix_at_threshold = cm_at_threshold
+    confusion_matrix = cm
 
-    def tpr_at_threshold(self, threshold):
+    def tpr(self, threshold):
         """True Positive Rate at threshold(s)."""
-        return self.cm_at_threshold(threshold).tpr()
+        return self.cm(threshold).tpr()
 
-    def fnr_at_threshold(self, threshold):
+    def fnr(self, threshold):
         """False Negative Rate at threshold(s)."""
-        return self.cm_at_threshold(threshold).fnr()
+        return self.cm(threshold).fnr()
 
-    def tnr_at_threshold(self, threshold):
+    def tnr(self, threshold):
         """True Negative Rate at threshold(s)."""
-        return self.cm_at_threshold(threshold).tnr()
+        return self.cm(threshold).tnr()
 
-    def fpr_at_threshold(self, threshold):
+    def fpr(self, threshold):
         """False Positive Rate at threshold(s)."""
-        return self.cm_at_threshold(threshold).fpr()
+        return self.cm(threshold).fpr()
 
     def threshold_at_tpr(self, tpr):
         """Set threshold at True Positive Rate."""
@@ -174,6 +174,7 @@ class Scores:
             P(score <= threshold) = target_ratio, if right_continuous = True
             P(score < threshold) = target_ratio, if right_continuous = False
         """
+        isscalar = np.isscalar(target_ratio)
         target_ratio = np.asarray(target_ratio)
 
         # The standard case is an increasing metric based on pos, i.e., FNR, with
@@ -213,9 +214,6 @@ class Scores:
         threshold[target_ratio <= 0.0] = np.nextafter(scores[0], -np.inf)
         threshold[target_ratio >= 1.0] = np.nextafter(scores[-1], np.inf)
 
-        if np.isscalar(threshold):
+        if isscalar:
             threshold = threshold.item()
         return threshold
-
-    def eer(self) -> float:
-        pass

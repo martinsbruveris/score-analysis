@@ -3,6 +3,129 @@ from typing import Union
 import numpy as np
 
 
+def tp(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    True Positives for binary confusion matrices. Test detects the condition while the
+    condition is present.
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...).
+    """
+    return matrix[..., 0, 0]
+
+
+def tn(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    True Negatives for binary confusion matrices. Test does not detect the condition and
+    the condition is absent.
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...).
+    """
+    return matrix[..., 1, 1]
+
+
+def fp(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    False Positives for binary confusion matrices. Test detects the condition while the
+    condition is absent.
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...).
+    """
+    return matrix[..., 1, 0]
+
+
+def fn(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    False Negatives for binary confusion matrices. Test does not detect the condition
+    while the condition is present.
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...).
+    """
+    return matrix[..., 0, 1]
+
+
+def p(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    Condition Positive for binary confusion matrices. Number of samples with condition
+    positive.
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...).
+    """
+    return matrix[..., 0, 0] + matrix[..., 0, 1]
+
+
+def n(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    Condition Negative for binary confusion matrices. Number of samples with condition
+    negative.
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...).
+    """
+    return matrix[..., 1, 0] + matrix[..., 1, 1]
+
+
+def top(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    Test Outcome Positive. Number of samples where test detects condition.
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...).
+    """
+    return matrix[..., 0, 0] + matrix[..., 1, 0]
+
+
+def ton(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    Test Outcome Negative. Number of samples where test does not detect condition.
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...).
+    """
+    return matrix[..., 0, 1] + matrix[..., 1, 1]
+
+
+def pop(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    Total population for confusion matrices.
+
+    Args:
+        matrix: Array of shape (..., N, N).
+
+    Returns:
+        Array of shape (...).
+    """
+    return np.sum(matrix, axis=(-1, -2))
+
+
 def accuracy(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
     Accuracy for confusion matrices.
@@ -24,6 +147,22 @@ def accuracy(matrix: np.ndarray) -> Union[np.ndarray, float]:
     return res
 
 
+def error_rate(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    Error rate for confusion matrices.
+
+    Formula:
+        Error Rate = 1 - Accuracy
+
+    Args:
+        matrix: Array of shape (..., N, N).
+
+    Returns:
+        Array of shape (...). Returns NaNs in case of zero matrix.
+    """
+    return 1 - accuracy(matrix)
+
+
 def tpr(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
     True Positive Rate for binary confusion matrices.
@@ -38,32 +177,9 @@ def tpr(matrix: np.ndarray) -> Union[np.ndarray, float]:
         Array of shape (...). Returns NaNs in case of no elements with positive
         condition.
     """
-
     tp = matrix[..., 0, 0]
     p = matrix[..., 0, 0] + matrix[..., 0, 1]
     res = np.divide(tp, p, out=np.full_like(tp, np.nan, dtype=float), where=p != 0)
-    res = res.item() if res.ndim == 0 else res  # Reduce to scalar
-    return res
-
-
-def fnr(matrix: np.ndarray) -> Union[np.ndarray, float]:
-    """
-    False Negative Rate for binary confusion matrices.
-
-    Formula:
-        FNR = FN / (TP + FN) = FN / P
-
-    Args:
-        matrix: Array of shape (..., 2, 2).
-
-    Returns:
-        Array of shape (...). Returns NaNs in case of no elements with positive
-        condition.
-    """
-
-    fn = matrix[..., 0, 1]
-    p = matrix[..., 0, 0] + matrix[..., 0, 1]
-    res = np.divide(fn, p, out=np.full_like(fn, np.nan, dtype=float), where=p != 0)
     res = res.item() if res.ndim == 0 else res  # Reduce to scalar
     return res
 
@@ -82,7 +198,6 @@ def tnr(matrix: np.ndarray) -> Union[np.ndarray, float]:
         Array of shape (...). Returns NaNs in case of no elements with positive
         condition.
     """
-
     tn = matrix[..., 1, 1]
     n = matrix[..., 1, 0] + matrix[..., 1, 1]
     res = np.divide(tn, n, out=np.full_like(tn, np.nan, dtype=float), where=n != 0)
@@ -104,9 +219,105 @@ def fpr(matrix: np.ndarray) -> Union[np.ndarray, float]:
         Array of shape (...). Returns NaNs in case of no elements with positive
         condition.
     """
-
     fp = matrix[..., 1, 0]
     n = matrix[..., 1, 0] + matrix[..., 1, 1]
     res = np.divide(fp, n, out=np.full_like(fp, np.nan, dtype=float), where=n != 0)
     res = res.item() if res.ndim == 0 else res  # Reduce to scalar
     return res
+
+
+def fnr(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    False Negative Rate for binary confusion matrices.
+
+    Formula:
+        FNR = FN / (TP + FN) = FN / P
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...). Returns NaNs in case of no elements with positive
+        condition.
+    """
+    fn = matrix[..., 0, 1]
+    p = matrix[..., 0, 0] + matrix[..., 0, 1]
+    res = np.divide(fn, p, out=np.full_like(fn, np.nan, dtype=float), where=p != 0)
+    res = res.item() if res.ndim == 0 else res  # Reduce to scalar
+    return res
+
+
+def ppv(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    Positive Predictive Value for binary confusion matrices.
+
+    Formula:
+        PPV = TP / (TP + FP) = TP / TOP
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...). Returns NaNs in case of no elements with prediction
+        positive.
+    """
+    tp = matrix[..., 0, 0]
+    top = matrix[..., 0, 0] + matrix[..., 1, 0]
+    res = np.divide(tp, top, out=np.full_like(tp, np.nan, dtype=float), where=top != 0)
+    res = res.item() if res.ndim == 0 else res  # Reduce to scalar
+    return res
+
+
+def npv(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    Negative Predictive Value for binary confusion matrices.
+
+    Formula:
+        NPV = TN / (TN + FN) = TN / TON
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...). Returns NaNs in case of no elements with prediction
+        positive.
+    """
+    tn = matrix[..., 1, 1]
+    ton = matrix[..., 1, 1] + matrix[..., 0, 1]
+    res = np.divide(tn, ton, out=np.full_like(tn, np.nan, dtype=float), where=ton != 0)
+    res = res.item() if res.ndim == 0 else res  # Reduce to scalar
+    return res
+
+
+def fdr(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    False Discovery Rate for binary confusion matrices.
+
+    Formula:
+        FDR = FP / (TP + FP) = FP / TOP = 1 - PPV
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...). Returns NaNs in case of no elements with prediction
+        positive.
+    """
+    return 1 - ppv(matrix)
+
+
+def for_(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    False Omission Rate for binary confusion matrices.
+
+    Formula:
+        FOR = FN / (TN + FN) = FN / TON = 1 - NPV
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...). Returns NaNs in case of no elements with prediction
+        negative.
+    """
+    return 1 - npv(matrix)

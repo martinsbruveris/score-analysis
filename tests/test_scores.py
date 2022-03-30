@@ -4,6 +4,12 @@ import pytest
 from score_analysis.scores import Scores
 
 
+def test_from_labels():
+    scores = Scores.from_labels(scores=[3, 2, 1], labels=[2, 2, 3], pos_label=2)
+    np.testing.assert_equal(scores.pos, [2, 3])
+    np.testing.assert_equal(scores.neg, [1])
+
+
 @pytest.mark.parametrize(
     "pos, neg, threshold, score_class, equal_class, expected",
     [
@@ -47,9 +53,9 @@ from score_analysis.scores import Scores
         [[0, 1, 2, 3], [0], [[2.5]], "pos", "pos", [[[[1, 3], [0, 1]]]]],
     ],
 )
-def test_cm_at_threshold(pos, neg, threshold, score_class, equal_class, expected):
+def test_cm(pos, neg, threshold, score_class, equal_class, expected):
     scores = Scores(pos, neg, score_class=score_class, equal_class=equal_class)
-    cm = scores.cm_at_threshold(threshold)
+    cm = scores.cm(threshold)
     np.testing.assert_equal(cm.matrix, expected)
 
 
@@ -62,10 +68,25 @@ def test_cm_at_threshold(pos, neg, threshold, score_class, equal_class, expected
         [[0, 1, 2, 3], [], [-1, 0, 1.5, 3, 4], [1.0, 1.0, 0.5, 0.25, 0.0]],
     ],
 )
-def test_tpr_at_threshold(pos, neg, threshold, expected):
+def test_tpr(pos, neg, threshold, expected):
     scores = Scores(pos, neg)
-    tpr = scores.tpr_at_threshold(threshold)
+    tpr = scores.tpr(threshold)
     np.testing.assert_equal(tpr, expected)
+
+
+def test_fnr_etc():
+    scores = Scores(pos=[0, 1, 2, 3], neg=[0, 1, 2, 3, 4])
+    tpr = scores.tpr(threshold=2.5)
+    np.testing.assert_allclose(tpr, 0.25)
+
+    fnr = scores.fnr(threshold=2.5)
+    np.testing.assert_allclose(fnr, 0.75)
+
+    tnr = scores.tnr(threshold=2.5)
+    np.testing.assert_allclose(tnr, 0.6)
+
+    fpr = scores.fpr(threshold=2.5)
+    np.testing.assert_allclose(fpr, 0.4)
 
 
 @pytest.mark.parametrize(
@@ -94,6 +115,17 @@ def test_threshold_at_tpr(pos, tpr, score_class, equal_class, expected):
     scores = Scores(pos, [], score_class=score_class, equal_class=equal_class)
     threshold = scores.threshold_at_tpr(tpr)
     np.testing.assert_allclose(threshold, expected, atol=1e-10)
+
+
+def test_invalid_threshold_at_tpr_etc():
+    with pytest.raises(ValueError):
+        Scores(pos=[], neg=[1, 2]).threshold_at_tpr(0.5)
+    with pytest.raises(ValueError):
+        Scores(pos=[], neg=[1, 2]).threshold_at_fnr(0.5)
+    with pytest.raises(ValueError):
+        Scores(pos=[1, 2], neg=[]).threshold_at_tnr(0.5)
+    with pytest.raises(ValueError):
+        Scores(pos=[1, 2], neg=[]).threshold_at_fpr(0.5)
 
 
 @pytest.mark.parametrize(

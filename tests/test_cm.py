@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from score_analysis.cm import BinaryConfusionMatrix, ConfusionMatrix
 
@@ -79,6 +80,58 @@ def test_from_nested_lists():
     np.testing.assert_equal(cm.matrix, data)
 
 
+def test_invalid_init():
+    # Initialize with matrix and additional arguments
+    with pytest.raises(ValueError):
+        ConfusionMatrix(labels=[], matrix=[[1, 1], [1, 1]])
+    with pytest.raises(ValueError):
+        ConfusionMatrix(predictions=[], matrix=[[1, 1], [1, 1]])
+    with pytest.raises(ValueError):
+        ConfusionMatrix(weights=[], matrix=[[1, 1], [1, 1]])
+
+    # Initialize with missing arguments
+    with pytest.raises(ValueError):
+        ConfusionMatrix(labels=[1, 2], predictions=None)
+    with pytest.raises(ValueError):
+        ConfusionMatrix(labels=None, predictions=[1, 2])
+
+    # Test invalid matrices and classes
+    with pytest.raises(ValueError):
+        ConfusionMatrix(matrix=[2, 3])
+    with pytest.raises(ValueError):
+        ConfusionMatrix(matrix=[[1, 2]])
+    with pytest.raises(ValueError):
+        ConfusionMatrix(matrix=[[1]])
+    with pytest.raises(ValueError):
+        ConfusionMatrix(matrix=[[1, 1], [1, 1]], classes=[1, 2, 3])
+    with pytest.raises(ValueError):
+        ConfusionMatrix(matrix=[[1, 1], [1, 1]], classes=[1, 1])
+
+    # Invalid parameters from dict
+    with pytest.raises(ValueError):
+        ConfusionMatrix(matrix={0: {0: 2, 1: 2}, 1: {0: 2, 1: 2}}, classes=[1, 2])
+    with pytest.raises(ValueError):
+        ConfusionMatrix(matrix={0: {0: 2, 1: 2}, 1: {1: 2, 2: 2}}, classes=[0, 1])
+
+    # Invalid parameters from dataframe
+    with pytest.raises(ValueError):
+        df = pd.DataFrame([[1, 1], [1, 1]], index=[0, 1], columns=[2, 3])
+        ConfusionMatrix(matrix=df)
+    with pytest.raises(ValueError):
+        df = pd.DataFrame([[1, 1], [1, 1], [1, 1]], index=[0, 0, 1], columns=[0, 1])
+        ConfusionMatrix(matrix=df)
+    with pytest.raises(ValueError):
+        df = pd.DataFrame([[1, 1, 1], [1, 1, 1]], index=[0, 1], columns=[0, 0, 1])
+        ConfusionMatrix(matrix=df)
+    with pytest.raises(ValueError):
+        df = pd.DataFrame([[1, 1], [1, 1]], index=[0, 1], columns=[0, 1])
+        ConfusionMatrix(matrix=df, classes=[1, 2])
+
+    # Invalid weights vector
+    with pytest.raises(ValueError):
+        ConfusionMatrix(labels=[1, 2], predictions=[1, 2], weights=[1.0])
+
+
 def test_vectorized():
     data = np.array([[1, 0], [0, 1]])
     data = data[np.newaxis, np.newaxis, ...]
@@ -94,9 +147,40 @@ def test_vectorized():
     assert sub_cm.matrix.shape == (1, 2, 2)
 
 
+def test_basic_metrics():
+    # fmt: off
+    matrix = [
+        [1, 2],
+        [3, 4]
+    ]
+    # fmt: on
+
+    cm = ConfusionMatrix(matrix=matrix)
+    np.testing.assert_equal(cm.tp(), [1, 4])
+    np.testing.assert_equal(cm.tn(), [4, 1])
+    np.testing.assert_equal(cm.fp(), [3, 2])
+    np.testing.assert_equal(cm.fn(), [2, 3])
+    np.testing.assert_equal(cm.p(), [3, 7])
+    np.testing.assert_equal(cm.n(), [7, 3])
+    np.testing.assert_equal(cm.top(), [4, 6])
+    np.testing.assert_equal(cm.ton(), [6, 4])
+    np.testing.assert_equal(cm.pop(), 10)
+
+    cm = BinaryConfusionMatrix(matrix=matrix)
+    np.testing.assert_equal(cm.tp(), 1)
+    np.testing.assert_equal(cm.tn(), 4)
+    np.testing.assert_equal(cm.fp(), 3)
+    np.testing.assert_equal(cm.fn(), 2)
+    np.testing.assert_equal(cm.p(), 3)
+    np.testing.assert_equal(cm.n(), 7)
+    np.testing.assert_equal(cm.top(), 4)
+    np.testing.assert_equal(cm.ton(), 6)
+
+
 def test_accuracy():
     cm = ConfusionMatrix(matrix=[[1, 0], [1, 2]])
     assert cm.accuracy() == 0.75
+    assert cm.error_rate() == 0.25
 
 
 def test_one_vs_all_1():
@@ -118,9 +202,53 @@ def test_one_vs_all_2():
     np.testing.assert_equal(cm.one_vs_all().matrix, expected)
 
 
+@pytest.mark.parametrize(
+    "metric, expected",
+    [
+        ["tpr", [1.0 / 3.0, 0.8]],
+        ["tnr", [0.8, 1.0 / 3.0]],
+        ["fpr", [0.2, 2.0 / 3.0]],
+        ["fnr", [2.0 / 3.0, 0.2]],
+        ["ppv", [0.5, 2.0 / 3.0]],
+        ["npv", [2.0 / 3.0, 0.5]],
+        ["fdr", [0.5, 1.0 / 3.0]],
+        ["for_", [1.0 / 3.0, 0.5]],
+        ["class_accuracy", [0.625, 0.625]],
+        ["class_error_rate", [0.375, 0.375]],
+    ],
+)
+def test_per_class_metrics(metric, expected):
+    # fmt: off
+    matrix = [
+        [1, 2],
+        [1, 4],
+    ]
+    # fmt: on
+    cm = ConfusionMatrix(matrix=matrix, classes=["a", "b"])
+
+    # As array
+    result = getattr(cm, metric)(as_dict=False)
+    np.testing.assert_allclose(result, expected)
+
+    # As dict
+    result = getattr(cm, metric)(as_dict=True)
+    np.testing.assert_allclose(result["a"], expected[0])
+    np.testing.assert_allclose(result["b"], expected[1])
+
+
 def test_binary_tpr_etc():
-    cm = BinaryConfusionMatrix(matrix=[[1, 3], [2, 3]])
-    assert cm.tpr() == 0.25
-    assert cm.fnr() == 0.75
-    assert cm.tnr() == 0.6
-    assert cm.fpr() == 0.4
+    # fmt: off
+    matrix = [
+        [1, 3],
+        [2, 3]
+    ]
+    # fmt: on
+    cm = BinaryConfusionMatrix(matrix=matrix)
+    np.testing.assert_allclose(cm.tpr(), 0.25)
+    np.testing.assert_allclose(cm.fnr(), 0.75)
+    np.testing.assert_allclose(cm.tnr(), 0.6)
+    np.testing.assert_allclose(cm.fpr(), 0.4)
+    np.testing.assert_allclose(cm.ppv(), 1.0 / 3.0)
+    np.testing.assert_allclose(cm.npv(), 0.5)
+    np.testing.assert_allclose(cm.fdr(), 2.0 / 3.0)
+    np.testing.assert_allclose(cm.for_(), 0.5)

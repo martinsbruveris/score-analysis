@@ -3,6 +3,8 @@ ConfusionMatrix module.
 """
 from __future__ import annotations
 
+from typing import Union
+
 import numpy as np
 import pandas as pd
 
@@ -219,11 +221,120 @@ class ConfusionMatrix:
             )
         return BinaryConfusionMatrix(matrix=matrix)
 
-    def accuracy(self):
+    def _class_metric_as_dict(self, arr: np.ndarray) -> dict:
+        """
+        Converts per-class metrics in array form to dict.
+
+        We assume that arr is array of shape (..., N). The dictionary has classes as
+        keys and arrays of shape (...) as values.
+        """
+        res = {c: arr[..., j] for j, c in enumerate(self.classes)}
+        return res
+
+    def pop(self) -> float:
+        """Population"""
+        return metrics.pop(self.matrix)
+
+    def accuracy(self) -> float:
         """Accuracy"""
         return metrics.accuracy(self.matrix)
 
+    def error_rate(self) -> float:
+        """Error Rate"""
+        return metrics.error_rate(self.matrix)
 
+    def tp(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """True Positves"""
+        res = metrics.tp(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def tn(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """True Negatives"""
+        res = metrics.tn(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def fp(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """False Positives"""
+        res = metrics.fp(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def fn(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """False Negatives"""
+        res = metrics.fn(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def p(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """Condition Positve"""
+        res = metrics.p(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def n(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """Condition Negative"""
+        res = metrics.n(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def top(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """Test Outcome Positive"""
+        res = metrics.top(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def ton(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """Test Outcome Negative"""
+        res = metrics.ton(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def tpr(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """True Positve Rate"""
+        res = metrics.tpr(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def tnr(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """True Negative Rate"""
+        res = metrics.tnr(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def fpr(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """False Positive Rate"""
+        res = metrics.fpr(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def fnr(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """False Negative Rate"""
+        res = metrics.fnr(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def ppv(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """Positive Predictive Value"""
+        res = metrics.ppv(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def npv(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """Negative Predictive Value"""
+        res = metrics.npv(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def fdr(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """False Discovery Rate"""
+        res = metrics.fdr(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def for_(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """False Omission Rate"""
+        res = metrics.for_(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def class_accuracy(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """Class Accuracy"""
+        res = metrics.accuracy(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def class_error_rate(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+        """Class Error Rate"""
+        res = metrics.error_rate(self.one_vs_all().matrix)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+
+# noinspection PyMethodOverriding
 class BinaryConfusionMatrix(ConfusionMatrix):
     """
     Confusion matrix for two-class classifications.
@@ -247,13 +358,41 @@ class BinaryConfusionMatrix(ConfusionMatrix):
             classes=[pos_label, neg_label],
         )
 
+    def tp(self) -> float:
+        """True Positives"""
+        return metrics.tp(self.matrix)
+
+    def tn(self) -> float:
+        """True Negatives"""
+        return metrics.tn(self.matrix)
+
+    def fp(self) -> float:
+        """False Positives"""
+        return metrics.fp(self.matrix)
+
+    def fn(self) -> float:
+        """False Negatives"""
+        return metrics.fn(self.matrix)
+
+    def p(self) -> float:
+        """Condition Positive"""
+        return metrics.p(self.matrix)
+
+    def n(self) -> float:
+        """Condition Negative"""
+        return metrics.n(self.matrix)
+
+    def top(self) -> float:
+        """Test Outcome Positive"""
+        return metrics.top(self.matrix)
+
+    def ton(self) -> float:
+        """Test Outcome Negative"""
+        return metrics.ton(self.matrix)
+
     def tpr(self) -> float:
         """True Positve Rate"""
         return metrics.tpr(self.matrix)
-
-    def fnr(self) -> float:
-        """False Negative Rate"""
-        return metrics.fnr(self.matrix)
 
     def tnr(self) -> float:
         """True Negative Rate"""
@@ -262,3 +401,23 @@ class BinaryConfusionMatrix(ConfusionMatrix):
     def fpr(self) -> float:
         """False Positive Rate"""
         return metrics.fpr(self.matrix)
+
+    def fnr(self) -> float:
+        """False Negative Rate"""
+        return metrics.fnr(self.matrix)
+
+    def ppv(self) -> float:
+        """Positive Predictive Value"""
+        return metrics.ppv(self.matrix)
+
+    def npv(self) -> float:
+        """Negative Predictive Value"""
+        return metrics.npv(self.matrix)
+
+    def fdr(self) -> float:
+        """False Discovery Rate"""
+        return metrics.fdr(self.matrix)
+
+    def for_(self) -> float:
+        """False Omission Rate"""
+        return metrics.for_(self.matrix)

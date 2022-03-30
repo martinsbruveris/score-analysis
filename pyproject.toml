@@ -5,7 +5,7 @@ description = "Code to evaluate models"
 authors = [
     "Martins Bruveris <martins.bruveris@onfido.com>",
 ]
-# readme = "README.md"
+readme = "README.md"
 packages = [{include = "score_analysis"}]
 
 [[tool.poetry.source]]

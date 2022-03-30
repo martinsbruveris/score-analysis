@@ -8,4 +8,7 @@ style:
 
 # Run tests for the library
 test:
-	poetry run pytest -s -v ./tests/
+	poetry run coverage erase
+	poetry run coverage run -a --source=./score_analysis --branch -m pytest -s -v --black tests --junit-xml unit_results.xml
+	poetry run coverage report
+	poetry run coverage xml

@@ -11,6 +11,8 @@ We assume that we work with a binary classification problem. First, we create a 
 object with the experiment results. We can do this in two ways.
 
 ```python
+from score_analysis import Scores
+
 # If we have the scores for the positive and negative classes separately
 scores = Scores(pos=[1, 2, 3], neg=[0.5, 1.5])
 # If we have an intermingled set of scores and labels

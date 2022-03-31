@@ -5,6 +5,21 @@ metrics computations such as TPR, FPR, EER and methods for threshold setting.
 
 ## Usage
 
+### Terminology
+
+At Onfido, we like to work with metrics based on acceptance and rejection, such as
+FAR (false acceptance rate) and FRR (false rejection rate), while the standard ML
+terminology talks about positive and negative classes and FPR (false positive rate) and
+FNR (false negative rate).
+
+This library adopts the standard ML terminology. The translation is simple: just replace
+"accept" with "positive" and replace "reject" with "negative" and you have a dictionary
+between the two worlds.
+
+The library is also agnostic to which direction scores are pointing. It works with 
+scores that indicate membership of the positive (accept) class as well as with scores
+that indicate membership of the negative (reject) class.
+
 ### Scores
 
 We assume that we work with a binary classification problem. First, we create a `Scores`

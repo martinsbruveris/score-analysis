@@ -250,6 +250,35 @@ url = "https://nexus.mgmt.onfido.xyz/repository/pypi/simple"
 reference = "onfido"
 
 [[package]]
+name = "bump2version"
+version = "1.0.1"
+description = "Version-bump your software with a single command!"
+category = "dev"
+optional = false
+python-versions = ">=3.5"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.mgmt.onfido.xyz/repository/pypi/simple"
+reference = "onfido"
+
+[[package]]
+name = "bumpversion"
+version = "0.6.0"
+description = "Version-bump your software with a single command!"
+category = "dev"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+bump2version = "*"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.mgmt.onfido.xyz/repository/pypi/simple"
+reference = "onfido"
+
+[[package]]
 name = "cachecontrol"
 version = "0.12.10"
 description = "httplib2 caching for requests"
@@ -2646,7 +2675,7 @@ docs = ["enum-tools", "sphinx", "sphinx-rtd-theme", "sphinx-toolbox"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8,<3.10"
-content-hash = "08efb0f69bfe33e389a48929709e047fa98f7ebf5d22a053f9804739896abe51"
+content-hash = "559609f287d5517adde3c99de9413ee3689523e537f782bcbbcb960acd6f4d12"
 
 [metadata.files]
 alabaster = [
@@ -2743,6 +2772,14 @@ black = [
 bleach = [
     {file = "bleach-4.1.0-py2.py3-none-any.whl", hash = "sha256:4d2651ab93271d1129ac9cbc679f524565cc8a1b791909c4a51eac4446a15994"},
     {file = "bleach-4.1.0.tar.gz", hash = "sha256:0900d8b37eba61a802ee40ac0061f8c2b5dee29c1927dd1d233e075ebf5a71da"},
+]
+bump2version = [
+    {file = "bump2version-1.0.1-py2.py3-none-any.whl", hash = "sha256:37f927ea17cde7ae2d7baf832f8e80ce3777624554a653006c9144f8017fe410"},
+    {file = "bump2version-1.0.1.tar.gz", hash = "sha256:762cb2bfad61f4ec8e2bdf452c7c267416f8c70dd9ecb1653fd0bbb01fa936e6"},
+]
+bumpversion = [
+    {file = "bumpversion-0.6.0-py2.py3-none-any.whl", hash = "sha256:4eb3267a38194d09f048a2179980bb4803701969bff2c85fa8f6d1ce050be15e"},
+    {file = "bumpversion-0.6.0.tar.gz", hash = "sha256:4ba55e4080d373f80177b4dabef146c07ce73c7d1377aabf9d3c3ae1f94584a6"},
 ]
 cachecontrol = [
     {file = "CacheControl-0.12.10-py2.py3-none-any.whl", hash = "sha256:b0d43d8f71948ef5ebdee5fe236b86c6ffc7799370453dccb0e894c20dfa487c"},

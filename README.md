@@ -1,7 +1,7 @@
 # onfido-score-analysis
 
 Package to analyse ML model results. Contains an efficient implementation of common
-metrics computations such as TPR, FPR and methods for threshold setting.
+metrics computations such as TPR, FPR, EER and methods for threshold setting.
 
 ## Usage
 
@@ -169,4 +169,3 @@ make test
 The following features are planned
 
 - [ ] Aliases for metrics
-- [ ] EER calculation

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Union
+from typing import Any, Tuple, Union
 
 import numpy as np
 
@@ -136,17 +136,17 @@ class Scores:
             raise ValueError("Cannot set threshold at FNR with no positive values.")
         return self._threshold_at_ratio(self.pos, fnr, True, BinaryLabel.pos)
 
-    def threshold_at_fpr(self, fpr):
-        """Set threshold at False Positive Rate."""
-        if len(self.neg) == 0:
-            raise ValueError("Cannot set threshold at FPR with no negative values.")
-        return self._threshold_at_ratio(self.neg, fpr, False, BinaryLabel.neg)
-
     def threshold_at_tnr(self, tnr):
         """Set threshold at True Negative Rate."""
         if len(self.neg) == 0:
             raise ValueError("Cannot set threshold at TNR with no negative values.")
         return self._threshold_at_ratio(self.neg, tnr, True, BinaryLabel.neg)
+
+    def threshold_at_fpr(self, fpr):
+        """Set threshold at False Positive Rate."""
+        if len(self.neg) == 0:
+            raise ValueError("Cannot set threshold at FPR with no negative values.")
+        return self._threshold_at_ratio(self.neg, fpr, False, BinaryLabel.neg)
 
     def _threshold_at_ratio(
         self, scores, target_ratio, increasing: bool, ratio_class: BinaryLabel
@@ -179,8 +179,9 @@ class Scores:
 
         # The standard case is an increasing metric based on pos, i.e., FNR, with
         # equal_class and score_class equal to pos. This case is left-continuous.
-        left_continuous = ratio_class == BinaryLabel.pos
         # Metrics based on neg, change the continuity behaviour at the sample points.
+        left_continuous = ratio_class == BinaryLabel.pos
+        # The equality class also determines the continuity
         if self.equal_class != BinaryLabel.pos:
             left_continuous = not left_continuous
         # We transform non-increasing metrics into increasing ones. Note that this does
@@ -191,9 +192,19 @@ class Scores:
         if self.score_class != BinaryLabel.pos:
             target_ratio = 1.0 - target_ratio
             left_continuous = not left_continuous
+
         # From here on, we can pretend to be in the standard case, i.e., calculate
         # thresholds based on an increasing metric
+        threshold = self._invert_increasing_function(
+            scores, target_ratio, left_continuous
+        )
 
+        if isscalar:
+            threshold = threshold.item()
+        return threshold
+
+    @staticmethod
+    def _invert_increasing_function(scores, target_ratio, left_continuous: bool):
         if not left_continuous:
             min_ratio = 1.0 / len(scores)
             target_ratio = target_ratio - min_ratio
@@ -214,6 +225,53 @@ class Scores:
         threshold[target_ratio <= 0.0] = np.nextafter(scores[0], -np.inf)
         threshold[target_ratio >= 1.0] = np.nextafter(scores[-1], np.inf)
 
-        if isscalar:
-            threshold = threshold.item()
         return threshold
+
+    def eer(self) -> Tuple[float, float]:
+        """
+        Calculates Equal Error Rate, i.e., where FPR = FNR.
+
+        Returns:
+            Tuple (threshold, eer) consisting of the threshold at which EER is achieved
+            and the EER value.
+        """
+        sign = -(self.threshold_at_fpr(0.0) - self.threshold_at_fnr(0.0))
+
+        # We consider the inverse functions, i.e., the function that map fpr/fnr to
+        # the threshold and find the cross-over point using the bisection method.
+        def f(x):
+            y = self.threshold_at_fpr(x) - self.threshold_at_fnr(x)
+            y = sign * y  # Normalize function, such that f(0) <= 0.
+            return y
+
+        # The function f is increasing, but not strictly, i.e., it can have flat spots,
+        # so we find the left-most root, the right-most root and then take the average.
+        left = self._find_root(f, 0.0, 1.0, find_first=True)
+        right = self._find_root(f, 0.0, 1.0, find_first=False)
+
+        eer = (left + right) / 2
+        threshold = self.threshold_at_fpr(eer)
+
+        return threshold, eer
+
+    @staticmethod
+    def _find_root(f, xa, xe, find_first, xtol=1e-10) -> float:
+        """Finds first or last root of a monotone function on interval (xa, xe)."""
+        if not (f(xa) <= 0 <= f(xe)):
+            raise ValueError(f"f({xa}) <= 0 <= f({xe}) not satisfied.")
+
+        while not np.abs(xa - xe) < xtol:
+            xm = (xa + xe) / 2
+            if f(xm) < 0:
+                xa = xm
+            elif f(xm) > 0:
+                xe = xm
+            else:
+                if find_first:
+                    # If we care about the first root, we move the end of
+                    # the interval to the left.
+                    xe = xm
+                else:
+                    xa = xm
+
+        return (xa + xe) / 2

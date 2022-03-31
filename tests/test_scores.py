@@ -170,3 +170,22 @@ def test_threshold_setting(scores, ratio, score_class, equal_class):
     score_obj = Scores([], scores, score_class=score_class, equal_class=reverse_class)
     threshold = score_obj.threshold_at_fpr(ratio)
     np.testing.assert_allclose(threshold, expected, atol=1e-10)
+
+
+@pytest.mark.parametrize(
+    "pos, neg, expected_threshold, expected_eer",
+    [
+        [[0, 1, 1, 1], [0, 1, 1, 1], 1.0, 0.375],
+    ],
+)
+def test_eer(pos, neg, expected_threshold, expected_eer):
+    scores = Scores(pos, neg)
+    threshold, eer = scores.eer()
+    np.testing.assert_allclose(threshold, expected_threshold)
+    np.testing.assert_allclose(eer, expected_eer)
+
+
+def test_find_root_invalid_input():
+    # Tests raising exception on invalid input function.
+    with pytest.raises(ValueError):
+        Scores._find_root(lambda _: 1.0, 0.0, 1.0, True)

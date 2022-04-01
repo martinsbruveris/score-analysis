@@ -18,7 +18,17 @@ between the two worlds.
 
 The library is also agnostic to which direction scores are pointing. It works with 
 scores that indicate membership of the positive (accept) class as well as with scores
-that indicate membership of the negative (reject) class.
+that indicate membership of the negative (reject) class. The score interpretation is
+set using the `score_class` parameter when constructing a `Scores` object.
+
+The key is to decouple the process of computing scores from the process of interpreting
+them. When we compute scores, e.g., using an ML model, some will point towards genuines,
+some towards spoofs/fraud. Sometimes we use score-mappers that reverse the score 
+orientation. We cannot change scores. But, when we move towards interpreting them, we
+should always use a fixed terminology: positive class means accept/genuine; negative 
+class means reject/spoof/fraud. And at the point, when we go from generating scores to
+interpreting them, we set, via the `score_class` parameter, how scores are to be 
+interpreted.
 
 ### Scores
 

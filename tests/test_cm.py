@@ -236,6 +236,34 @@ def test_per_class_metrics(metric, expected):
     np.testing.assert_allclose(result["b"], expected[1])
 
 
+@pytest.mark.parametrize(
+    "metric, binary_metric",
+    [
+        [ConfusionMatrix.tpr_ci, BinaryConfusionMatrix.tpr_ci],
+        [ConfusionMatrix.tnr_ci, BinaryConfusionMatrix.tnr_ci],
+        [ConfusionMatrix.fpr_ci, BinaryConfusionMatrix.fpr_ci],
+        [ConfusionMatrix.fnr_ci, BinaryConfusionMatrix.fnr_ci],
+    ],
+)
+def test_per_class_tpr_ci_etc(metric, binary_metric):
+    alpha = 0.1
+    m1 = [[3, 1], [5, 4]]
+    m2 = [[4, 5], [1, 3]]
+
+    cm = ConfusionMatrix(matrix=m1, classes=["a", "b"])
+    bcm1 = BinaryConfusionMatrix(matrix=m1)
+    bcm2 = BinaryConfusionMatrix(matrix=m2)
+    res = metric(cm, alpha, as_dict=False)
+    binary_res = np.stack(
+        [binary_metric(bcm1, alpha), binary_metric(bcm2, alpha)], axis=-1
+    )
+    np.testing.assert_allclose(res, binary_res)
+
+    res = metric(cm, alpha, as_dict=True)
+    np.testing.assert_allclose(res["a"], binary_metric(bcm1, alpha))
+    np.testing.assert_allclose(res["b"], binary_metric(bcm2, alpha))
+
+
 def test_binary_tpr_etc():
     # fmt: off
     matrix = [
@@ -252,3 +280,17 @@ def test_binary_tpr_etc():
     np.testing.assert_allclose(cm.npv(), 0.5)
     np.testing.assert_allclose(cm.fdr(), 2.0 / 3.0)
     np.testing.assert_allclose(cm.for_(), 0.5)
+
+
+@pytest.mark.parametrize(
+    "matrix, expected, metric",
+    [
+        [[[3, 1], [0, 0]], [0.32565535, 1.17434465], BinaryConfusionMatrix.tpr_ci],
+        [[[0, 0], [1, 3]], [0.32565535, 1.17434465], BinaryConfusionMatrix.tnr_ci],
+        [[[0, 0], [3, 1]], [0.32565535, 1.17434465], BinaryConfusionMatrix.fpr_ci],
+        [[[1, 3], [0, 0]], [0.32565535, 1.17434465], BinaryConfusionMatrix.fnr_ci],
+    ],
+)
+def test_binary_tpr_ci_etc(matrix, expected, metric):
+    cm = BinaryConfusionMatrix(matrix=matrix)
+    np.testing.assert_allclose(metric(cm, alpha=0.05), expected)

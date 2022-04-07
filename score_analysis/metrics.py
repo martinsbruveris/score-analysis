@@ -2,6 +2,8 @@ from typing import Union
 
 import numpy as np
 
+from .utils import binomial_ci
+
 
 def tp(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
@@ -245,6 +247,62 @@ def fnr(matrix: np.ndarray) -> Union[np.ndarray, float]:
     res = np.divide(fn, p, out=np.full_like(fn, np.nan, dtype=float), where=p != 0)
     res = res.item() if res.ndim == 0 else res  # Reduce to scalar
     return res
+
+
+def tpr_ci(matrix: np.ndarray, alpha: float = 0.05) -> np.ndarray:
+    """
+    Confidence inferval for the True Positive Rate for binary confusion matrices.
+
+    Args:
+        matrix: Array of shape (..., 2, 2)
+        alpha: Significance level. In range (0, 1).
+
+    Returns:
+        Array of shape (..., 2). Lower and upper limits of CI with coverage 1-alpha.
+    """
+    return binomial_ci(count=tp(matrix), nobs=p(matrix), alpha=alpha)
+
+
+def tnr_ci(matrix: np.ndarray, alpha: float = 0.05) -> np.ndarray:
+    """
+    Confidence inferval for the True Negative Rate for binary confusion matrices.
+
+    Args:
+        matrix: Array of shape (..., 2, 2)
+        alpha: Significance level. In range (0, 1).
+
+    Returns:
+        Array of shape (..., 2). Lower and upper limits of CI with coverage 1-alpha.
+    """
+    return binomial_ci(count=tn(matrix), nobs=n(matrix), alpha=alpha)
+
+
+def fpr_ci(matrix: np.ndarray, alpha: float = 0.05) -> np.ndarray:
+    """
+    Confidence inferval for the False Positive Rate for binary confusion matrices.
+
+    Args:
+        matrix: Array of shape (..., 2, 2)
+        alpha: Significance level. In range (0, 1).
+
+    Returns:
+        Array of shape (..., 2). Lower and upper limits of CI with coverage 1-alpha.
+    """
+    return binomial_ci(count=fp(matrix), nobs=n(matrix), alpha=alpha)
+
+
+def fnr_ci(matrix: np.ndarray, alpha: float = 0.05) -> np.ndarray:
+    """
+    Confidence inferval for the False Negative Rate for binary confusion matrices.
+
+    Args:
+        matrix: Array of shape (..., 2, 2)
+        alpha: Significance level. In range (0, 1).
+
+    Returns:
+        Array of shape (..., 2). Lower and upper limits of CI with coverage 1-alpha.
+    """
+    return binomial_ci(count=fn(matrix), nobs=p(matrix), alpha=alpha)
 
 
 def ppv(matrix: np.ndarray) -> Union[np.ndarray, float]:

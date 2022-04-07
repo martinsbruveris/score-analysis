@@ -89,3 +89,47 @@ def test_metric(matrix, expected, isscalar, func):
     result = func(matrix)
     np.testing.assert_equal(result, expected)
     assert np.isscalar(result) == isscalar
+
+
+@pytest.mark.parametrize(
+    "matrix, expected, func, alpha",
+    [
+        # TPR CI
+        # Regular computation
+        [[[3, 1], [3, 4]], [0.32565535, 1.17434465], metrics.tpr_ci, 0.05],
+        [[[3, 1], [3, 4]], [0.39387874, 1.10612126], metrics.tpr_ci, 0.1],
+        [[[0, 0], [0, 0]], [np.nan, np.nan], metrics.tpr_ci, 0.05],  # Nans
+        # Vectorized
+        [[[[3, 1], [0, 0]]], [[0.32565535, 1.17434465]], metrics.tpr_ci, 0.05],
+        [[[[[0, 0], [0, 0]]]], [[[np.nan, np.nan]]], metrics.tpr_ci, 0.05],
+        # TNR CI
+        # Regular computation
+        [[[3, 4], [1, 3]], [0.32565535, 1.17434465], metrics.tnr_ci, 0.05],
+        [[[3, 4], [1, 3]], [0.39387874, 1.10612126], metrics.tnr_ci, 0.1],
+        [[[0, 0], [0, 0]], [np.nan, np.nan], metrics.tnr_ci, 0.05],  # Nans
+        # Vectorized
+        [[[[0, 0], [1, 3]]], [[0.32565535, 1.17434465]], metrics.tnr_ci, 0.05],
+        [[[[[0, 0], [0, 0]]]], [[[np.nan, np.nan]]], metrics.tnr_ci, 0.05],
+        # FPR CI
+        # Regular computation
+        [[[3, 4], [3, 1]], [0.32565535, 1.17434465], metrics.fpr_ci, 0.05],
+        [[[3, 4], [3, 1]], [0.39387874, 1.10612126], metrics.fpr_ci, 0.1],
+        [[[0, 0], [0, 0]], [np.nan, np.nan], metrics.fpr_ci, 0.05],  # Nans
+        # Vectorized
+        [[[[0, 0], [3, 1]]], [[0.32565535, 1.17434465]], metrics.fpr_ci, 0.05],
+        [[[[[0, 0], [0, 0]]]], [[[np.nan, np.nan]]], metrics.fpr_ci, 0.05],
+        # FNR CI
+        # Regular computation
+        [[[1, 3], [3, 4]], [0.32565535, 1.17434465], metrics.fnr_ci, 0.05],
+        [[[1, 3], [3, 4]], [0.39387874, 1.10612126], metrics.fnr_ci, 0.1],
+        [[[0, 0], [0, 0]], [np.nan, np.nan], metrics.fnr_ci, 0.05],  # Nans
+        # Vectorized
+        [[[[1, 3], [0, 0]]], [[0.32565535, 1.17434465]], metrics.fnr_ci, 0.05],
+        [[[[[0, 0], [0, 0]]]], [[[np.nan, np.nan]]], metrics.fnr_ci, 0.05],
+    ],
+)
+def test_metric_ci(matrix, expected, func, alpha):
+    matrix = np.asarray(matrix)
+    expected = np.asarray(expected)
+    result = func(matrix, alpha)
+    np.testing.assert_allclose(result, expected)

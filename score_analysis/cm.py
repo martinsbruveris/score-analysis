@@ -303,6 +303,38 @@ class ConfusionMatrix:
         res = metrics.fnr(self.one_vs_all().matrix)
         return self._class_metric_as_dict(res) if as_dict else res
 
+    def tpr_ci(
+        self, alpha: float = 0.05, as_dict: bool = False
+    ) -> Union[dict, np.ndarray]:
+        """True Positive Rate confidence interval"""
+        res = metrics.tpr_ci(self.one_vs_all().matrix, alpha=alpha)  # (..., N, 2)
+        res = np.swapaxes(res, -1, -2)  # (..., 2, N)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def tnr_ci(
+        self, alpha: float = 0.05, as_dict: bool = False
+    ) -> Union[dict, np.ndarray]:
+        """True Negative Rate confidence interval"""
+        res = metrics.tnr_ci(self.one_vs_all().matrix, alpha=alpha)  # (..., N, 2)
+        res = np.swapaxes(res, -1, -2)  # (..., 2, N)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def fpr_ci(
+        self, alpha: float = 0.05, as_dict: bool = False
+    ) -> Union[dict, np.ndarray]:
+        """False Positive Rate confidence interval"""
+        res = metrics.fpr_ci(self.one_vs_all().matrix, alpha=alpha)  # (..., N, 2)
+        res = np.swapaxes(res, -1, -2)  # (..., 2, N)
+        return self._class_metric_as_dict(res) if as_dict else res
+
+    def fnr_ci(
+        self, alpha: float = 0.05, as_dict: bool = False
+    ) -> Union[dict, np.ndarray]:
+        """False Negative Rate confidence interval"""
+        res = metrics.fnr_ci(self.one_vs_all().matrix, alpha=alpha)  # (..., N, 2)
+        res = np.swapaxes(res, -1, -2)  # (..., 2, N)
+        return self._class_metric_as_dict(res) if as_dict else res
+
     def ppv(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
         """Positive Predictive Value"""
         res = metrics.ppv(self.one_vs_all().matrix)
@@ -405,6 +437,22 @@ class BinaryConfusionMatrix(ConfusionMatrix):
     def fnr(self) -> float:
         """False Negative Rate"""
         return metrics.fnr(self.matrix)
+
+    def tpr_ci(self, alpha: float = 0.05) -> np.ndarray:
+        """True Positve Rate confidence interval"""
+        return metrics.tpr_ci(self.matrix, alpha=alpha)
+
+    def tnr_ci(self, alpha: float = 0.05) -> np.ndarray:
+        """True Negative Rate confidence interval"""
+        return metrics.tnr_ci(self.matrix, alpha=alpha)
+
+    def fpr_ci(self, alpha: float = 0.05) -> np.ndarray:
+        """False Positve Rate confidence interval"""
+        return metrics.fpr_ci(self.matrix, alpha=alpha)
+
+    def fnr_ci(self, alpha: float = 0.05) -> np.ndarray:
+        """False Negative Rate confidence interval"""
+        return metrics.fnr_ci(self.matrix, alpha=alpha)
 
     def ppv(self) -> float:
         """Positive Predictive Value"""

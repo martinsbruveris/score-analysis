@@ -15,3 +15,7 @@ ignore:
     - '*':
         reason: No fix available
         expires: 2022-06-01T12:00:00.000Z
+  'SNYK-PYTHON-MISTUNE-2328096':
+    - '*':
+        reason: nbconvert must release new version, allowing mistune>2.0
+        expires: 2022-06-01T12:00:00.000Z

@@ -308,32 +308,44 @@ class ConfusionMatrix:
     ) -> Union[dict, np.ndarray]:
         """True Positive Rate confidence interval"""
         res = metrics.tpr_ci(self.one_vs_all().matrix, alpha=alpha)  # (..., N, 2)
-        res = np.swapaxes(res, -1, -2)  # (..., 2, N)
-        return self._class_metric_as_dict(res) if as_dict else res
+        if as_dict:
+            res = np.swapaxes(res, -1, -2)  # (..., 2, N)
+            return self._class_metric_as_dict(res)
+        else:
+            return res
 
     def tnr_ci(
         self, alpha: float = 0.05, as_dict: bool = False
     ) -> Union[dict, np.ndarray]:
         """True Negative Rate confidence interval"""
         res = metrics.tnr_ci(self.one_vs_all().matrix, alpha=alpha)  # (..., N, 2)
-        res = np.swapaxes(res, -1, -2)  # (..., 2, N)
-        return self._class_metric_as_dict(res) if as_dict else res
+        if as_dict:
+            res = np.swapaxes(res, -1, -2)  # (..., 2, N)
+            return self._class_metric_as_dict(res)
+        else:
+            return res
 
     def fpr_ci(
         self, alpha: float = 0.05, as_dict: bool = False
     ) -> Union[dict, np.ndarray]:
         """False Positive Rate confidence interval"""
         res = metrics.fpr_ci(self.one_vs_all().matrix, alpha=alpha)  # (..., N, 2)
-        res = np.swapaxes(res, -1, -2)  # (..., 2, N)
-        return self._class_metric_as_dict(res) if as_dict else res
+        if as_dict:
+            res = np.swapaxes(res, -1, -2)  # (..., 2, N)
+            return self._class_metric_as_dict(res)
+        else:
+            return res
 
     def fnr_ci(
         self, alpha: float = 0.05, as_dict: bool = False
     ) -> Union[dict, np.ndarray]:
         """False Negative Rate confidence interval"""
         res = metrics.fnr_ci(self.one_vs_all().matrix, alpha=alpha)  # (..., N, 2)
-        res = np.swapaxes(res, -1, -2)  # (..., 2, N)
-        return self._class_metric_as_dict(res) if as_dict else res
+        if as_dict:
+            res = np.swapaxes(res, -1, -2)  # (..., 2, N)
+            return self._class_metric_as_dict(res)
+        else:
+            return res
 
     def ppv(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
         """Positive Predictive Value"""

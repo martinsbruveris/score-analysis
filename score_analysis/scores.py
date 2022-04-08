@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Tuple, Union
+from typing import Any, Callable, Optional, Tuple, Union
 
 import numpy as np
 
@@ -67,6 +67,25 @@ class Scores:
         pos = scores[labels == pos_label]
         neg = scores[labels != pos_label]
         return Scores(pos, neg, score_class=score_class, equal_class=equal_class)
+
+    def __eq__(self, other: Scores) -> bool:
+        """
+        Tests if two Scores objects are equal. Equality is tested exactly, rounding
+        errors can lead to objects being not equal.
+
+        Args:
+            other: Object to test against.
+
+        Returns:
+            True, if objects are equal, false otherwise.
+        """
+        equal = (
+            np.array_equal(self.pos, other.pos)
+            and np.array_equal(self.neg, other.neg)
+            and self.score_class == other.score_class
+            and self.equal_class == other.equal_class
+        )
+        return equal
 
     def cm(self, threshold) -> BinaryConfusionMatrix:
         """
@@ -235,6 +254,14 @@ class Scores:
             Tuple (threshold, eer) consisting of the threshold at which EER is achieved
             and the EER value.
         """
+        # We treat the case of perfect separation separately
+        if self.pos[0] >= self.neg[-1]:
+            eer = 0.0 if self.score_class == BinaryLabel.pos else 1.0
+            return (self.pos[0] + self.neg[-1]) / 2, eer
+        if self.pos[-1] <= self.neg[0]:
+            eer = 1.0 if self.score_class == BinaryLabel.pos else 0.0
+            return (self.pos[-1] + self.neg[0]) / 2, eer
+
         sign = -(self.threshold_at_fpr(0.0) - self.threshold_at_fnr(0.0))
 
         # We consider the inverse functions, i.e., the function that map fpr/fnr to
@@ -275,3 +302,126 @@ class Scores:
                     xa = xm
 
         return (xa + xe) / 2
+
+    def bootstrap_sample(
+        self,
+        method: Union[str, Callable] = "replacement",
+        ratio: Optional[float] = None,
+    ) -> Scores:
+        """
+        Creates one bootstrap sample by sampling with the specified method.
+
+        Supported methods are
+         - "replacement" creates a sample with the same number of positive and negative
+            scores using sampling with replacement.
+         - "proportion" creates a sample of size defined by ratio using sampling without
+            replacement. This is similar to cross-validation, where a proportion of data
+            is used in each iteration.
+        - A callable with signature
+              method(source: Scores) -> Scores
+          creating one sample from a source Scores object.
+
+        Args:
+            method: Sampling method to create bootstrap sample. One of "replacement" or
+                "proportion".
+            ratio: Size of sample when using proportional sampling. In range (0, 1).
+
+        Returns:
+            Scores object with the sampled scores.
+        """
+        if isinstance(method, str):
+            if method == "replacement":
+                # Sampling a sample of the same size with replacement
+                pos = np.random.choice(self.pos, size=self.pos.size, replace=True)
+                neg = np.random.choice(self.neg, size=self.neg.size, replace=True)
+            elif method == "proportion":
+                if ratio is None:
+                    raise ValueError(
+                        "For proportional sampling, ratio has to be defined."
+                    )
+                # Sampling a sample defined by ratio, without replacement
+                pos_size = max(int(ratio * self.pos.size), 1)
+                pos = np.random.choice(self.pos, size=pos_size, replace=False)
+                neg_size = max(int(ratio * self.neg.size), 1)
+                neg = np.random.choice(self.neg, size=neg_size, replace=False)
+            else:
+                raise ValueError(f"Unsupported sampling method {method}.")
+
+            scores = Scores(
+                pos, neg, score_class=self.score_class, equal_class=self.equal_class
+            )
+        elif callable(method):
+            scores = method(self)  # Custom sampling method
+        else:
+            raise ValueError("Method must be a string or a callable.")
+
+        return scores
+
+    def bootstrap_metric(
+        self,
+        metric: Union[str, Callable],
+        *,
+        nb_samples: int = 1000,
+        method: Union[str, Callable] = "replacement",
+        ratio: Optional[float] = None,
+    ) -> np.ndarray:
+        """
+        Calculates nb_samples samples of metric using bootstrapping.
+
+        Args:
+            metric: Can be a string indicating a member function of the Scores class
+                or a callable with signature
+                    metric(sample: Scores) -> np.ndarray
+            nb_samples: Number of samples to return
+            method: Sampling method to create bootstrap sample. One of "replacement" or
+                "proportion".
+            ratio: Size of sample when using proportional sampling. In range (0, 1).
+
+        Returns:
+            Array of samples from metric. If metric returns arrays of shape (X,), the
+            function will return an array of shape (nb_samples, X).
+        """
+        if isinstance(metric, str):
+            metric = getattr(Scores, metric)
+
+        m = np.asarray(metric(self))
+        res = np.empty(shape=(nb_samples, *m.shape), dtype=m.dtype)
+        for j in range(nb_samples):
+            sample = self.bootstrap_sample(method=method, ratio=ratio)
+            res[j] = metric(sample)
+
+        return res
+
+    def bootstrap_ci(
+        self,
+        metric: Union[str, Callable],
+        alpha: float = 0.05,
+        *,
+        nb_samples: int = 1000,
+        method: Union[str, Callable] = "replacement",
+        ratio: Optional[float] = None,
+    ) -> np.ndarray:
+        """
+        Calculates the confidence interval with approximate coverage 1-alpha for metric
+        by bootstraping nb_samples from the positive and negative scores.
+
+        Args:
+            metric: Can be a string indicating a member function of the Scores class
+                or a callable with signature
+                    metric(sample: Scores) -> Union[float, np.ndarray]
+            alpha: Significance level. In range (0, 1).
+            nb_samples: Number of samples to bootstrap
+            method: Sampling method to create bootstrap sample. One of "replacement" or
+                "proportion".
+            ratio: Size of sample when using proportional sampling. In range (0, 1).
+
+        Returns:
+            Returns an array of shape (Y, 2) with lower and upper bounds of the CI, for
+            a metric returning shape (Y,).
+        """
+        samples = self.bootstrap_metric(
+            metric, nb_samples=nb_samples, method=method, ratio=ratio
+        )  # (N, Y)
+        ci = np.quantile(samples, q=[alpha / 2.0, (1 - alpha) / 2.0], axis=0)  # (2, Y)
+        ci = np.moveaxis(ci, source=0, destination=-1)  # (Y, 2)
+        return ci

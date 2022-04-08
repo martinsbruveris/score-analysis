@@ -255,7 +255,7 @@ def test_per_class_tpr_ci_etc(metric, binary_metric):
     bcm2 = BinaryConfusionMatrix(matrix=m2)
     res = metric(cm, alpha, as_dict=False)
     binary_res = np.stack(
-        [binary_metric(bcm1, alpha), binary_metric(bcm2, alpha)], axis=-1
+        [binary_metric(bcm1, alpha), binary_metric(bcm2, alpha)], axis=-2
     )
     np.testing.assert_allclose(res, binary_res)
 

@@ -153,10 +153,10 @@ Basic parameters
 
 Class metrics
 
-1. TPR (true positive rate)
-2. TNR (true negative rate)
-3. FPR (false positive rate)
-4. FNR (false negative rate)
+1. TPR (true positive rate) + confidence interval
+2. TNR (true negative rate) + confidence interval
+3. FPR (false positive rate) + confidence interval
+4. FNR (false negative rate) + confidence interval
 5. PPV (positive predictive value)
 6. NPV (negative predictive value)
 7. FDR (false discovery rate)
@@ -168,6 +168,44 @@ Overall metrics
 
 1. Accuracy
 2. Error rate
+
+### Confidence intervals
+
+The library implements bootstrapping to compute confidence intervals for arbirtrary
+(vectorized) measurements. It allows us to compute confidence intervals for arbitrary
+functions
+
+```python
+def metric(scores: Scores) -> np.ndarray:
+    # Simple metric calculating the mean of positive scores
+    return np.mean(scores.pos)
+
+scores = Scores(pos=[1, 2, 3], neg=[0, 2]) # Sample scores
+ci = scores.bootstrap_ci(metric=metric, alpha=0.05)
+
+# For metrics that are part of the Scores class we can pass their names
+ci = scores.bootstrap_ci(metric="eer")
+# Scores.eer() returns both threshold and EER value
+print(f"Threshold 95%-CI: ({ci[0, 0]:.4f}, {ci[0, 1]:.4f})")
+print(f"EER 95%-CI: ({ci[1, 0]:.3%}, {ci[1, 1]:.3%})")
+```
+
+### Vectorized operations
+
+All operations are, as far as feasible, vectorized and care has been taken to ensure
+consistent handling of matrix shapes.
+
+- A (vectorized) confusion matrix has shape (X, N, N), where X can be an arbitrary
+  shape, including the empty shape, and N is the number of classes.
+- Calculating a metric results in an array of shape (X, Y), where Y is the shape 
+  defined by the metric. Most metrics are scalar, Y=(), while confidence intervals
+  have shape (2,).
+- A confusion matrix can be converted to a vector of binary confusion matrices using the
+  one-vs-all strategy. This results in a binary confusion matrix of shape (X, N, 2, 2).
+- Calculating per-class metrics implicitely uses the one-vs-all strategy, so the result
+  has shape (X, N, Y).
+- Whenever a result is a scalar, we return it as such. This is, e.g., the case when
+  computing scalar metrics of single confusion matrices, i.e., X=Y=().
 
 ## Contributing
 

@@ -25,23 +25,30 @@ sphinx = { version = "^4.4.0", optional = true }
 sphinx-rtd-theme = { version = "*", optional = true }
 sphinx-toolbox = { version = "^2.0.0", optional = true }
 
+# Jupyter
+jupyter = { version = "*", optional = true }
+matplotlib = { version = "*", optional = true }
+seaborn = { version = "*", optional = true }
+
 [tool.poetry.dev-dependencies]
 black = { version = "*", allow-prereleases = true }
 bumpversion = "*"
 flake8 = "*"
 isort = "*"
-jupyter = "*"  # Only needed for prototyping
-matplotlib = "*"  # Only needed in conjunction with jupyter
 pre-commit = "*"
 pytest = "*"
 pytest-black = "*"
 pytest-cov = "*"
+pytest-flake8 = "*"
+pytest-isort = "*"
 pytest-xdist = "*"
 taskipy = "*"
 
 [tool.poetry.extras]
 # To compile documentation
 docs = ["enum-tools", "sphinx", "sphinx-rtd-theme", "sphinx-toolbox"]
+# To work with jupyter notebooks
+jupyter = ["jupyter", "matplotlib", "seaborn"]
 
 [tool.taskipy.tasks]
 bumpversion = "poetry run bumpversion patch && git push && git push --tags"

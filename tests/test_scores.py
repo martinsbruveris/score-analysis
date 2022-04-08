@@ -173,13 +173,19 @@ def test_threshold_setting(scores, ratio, score_class, equal_class):
 
 
 @pytest.mark.parametrize(
-    "pos, neg, expected_threshold, expected_eer",
+    "pos, neg, score_class, expected_threshold, expected_eer",
     [
-        [[0, 1, 1, 1], [0, 1, 1, 1], 1.0, 0.375],
+        [[0, 1, 1, 1], [0, 1, 1, 1], "pos", 1.0, 0.375],
+        # Perfect separation
+        [[2, 3, 4], [0, 1], "pos", 1.5, 0.0],
+        [[0, 1], [3, 4], "neg", 2.0, 0.0],
+        # Perfect separation, but in the wrong direction
+        [[2, 3, 4], [5, 6], "pos", 4.5, 1.0],
+        [[5, 6], [1, 2], "neg", 3.5, 1.0],
     ],
 )
-def test_eer(pos, neg, expected_threshold, expected_eer):
-    scores = Scores(pos, neg)
+def test_eer(pos, neg, score_class, expected_threshold, expected_eer):
+    scores = Scores(pos, neg, score_class=score_class)
     threshold, eer = scores.eer()
     np.testing.assert_allclose(threshold, expected_threshold)
     np.testing.assert_allclose(eer, expected_eer)
@@ -189,3 +195,63 @@ def test_find_root_invalid_input():
     # Tests raising exception on invalid input function.
     with pytest.raises(ValueError):
         Scores._find_root(lambda _: 1.0, 0.0, 1.0, True)
+
+
+#
+def test_bootstrap_sample_replacement():
+    scores = Scores(
+        pos=[1, 2, 3, 4], neg=[1, 2, 3], score_class="neg", equal_class="neg"
+    )
+
+    with pytest.raises(ValueError):
+        scores.bootstrap_sample(method="no_such_method")
+
+    sample = scores.bootstrap_sample(method="replacement")
+    assert sample.pos.size == scores.pos.size
+    assert sample.neg.size == scores.neg.size
+    assert set(sample.pos).issubset(set(scores.pos))
+    assert set(sample.neg).issubset(set(scores.neg))
+    assert sample.score_class == scores.score_class
+    assert sample.equal_class == scores.equal_class
+
+
+def test_bootstrap_sample_proportion():
+    scores = Scores(pos=[1, 2, 3, 4, 5, 6], neg=[1, 2, 3, 4])
+
+    with pytest.raises(ValueError):
+        scores.bootstrap_sample(method="proportion", ratio=None)
+
+    sample = scores.bootstrap_sample(method="proportion", ratio=0.5)
+    assert sample.pos.size == 3
+    assert sample.neg.size == 2
+    assert set(sample.pos).issubset(set(scores.pos))
+    assert set(sample.neg).issubset(set(scores.neg))
+
+
+def test_bootstrap_sample_callable():
+    scores = Scores(pos=[1, 2, 3, 4], neg=[1, 2, 3])
+
+    with pytest.raises(ValueError):
+        scores.bootstrap_sample(method=None)
+
+    sample = scores.bootstrap_sample(lambda x: x)  # Identity sampling
+    assert sample == scores
+
+
+@pytest.mark.parametrize("metric", ["eer", Scores.eer])
+@pytest.mark.parametrize("nb_samples", [1, 3])
+def test_bootstrap_metric(metric, nb_samples):
+    scores = Scores(pos=[1, 2, 3, 4], neg=[1, 2, 3])
+    samples = scores.bootstrap_metric(metric, nb_samples=nb_samples)
+    assert samples.shape == (nb_samples, 2)
+
+
+def test_bootstrap_ci():
+    scores = Scores(pos=[1, 2, 3, 4], neg=[1, 2, 3])
+    nb_samples = 3
+    # Testing with identity sampling, in which case CI should collapse
+    ci = scores.bootstrap_ci(metric="eer", nb_samples=nb_samples, method=lambda x: x)
+    eer = scores.eer()
+    for j in range(nb_samples):
+        np.testing.assert_equal(ci[..., 0], eer)
+        np.testing.assert_equal(ci[..., 1], eer)

@@ -3,6 +3,9 @@
 Package to analyse ML model results. Contains an efficient implementation of common
 metrics computations such as TPR, FPR, EER and methods for threshold setting.
 
+Check out the online 
+[documentation](https://library-docs.eu-west-1.dev.onfido.xyz/repo/onfido-score-analysis).
+
 ## Usage
 
 ### Terminology

@@ -1,3 +1,8 @@
+"""
+This module contains the fundamental metrics computations. The ConfusionMatrix class
+relies on the implementations in this module.
+"""
+
 from typing import Union
 
 import numpy as np
@@ -153,7 +158,8 @@ def error_rate(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
     Error rate for confusion matrices.
 
-    Formula:
+    Formula::
+
         Error Rate = 1 - Accuracy
 
     Args:
@@ -169,7 +175,8 @@ def tpr(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
     True Positive Rate for binary confusion matrices.
 
-    Formula:
+    Formula::
+
         TPR = TP / (TP + FN) = TP / P
 
     Args:
@@ -190,7 +197,8 @@ def tnr(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
     True Negative Rate for binary confusion matrices.
 
-    Formula:
+    Formula::
+
         TNR = TN / (FP + TN) = TN / N
 
     Args:
@@ -211,7 +219,8 @@ def fpr(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
     False Positive Rate for binary confusion matrices.
 
-    Formula:
+    Formula::
+
         FPR = FP / (FP + TN) = FP / N
 
     Args:
@@ -232,7 +241,8 @@ def fnr(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
     False Negative Rate for binary confusion matrices.
 
-    Formula:
+    Formula::
+
         FNR = FN / (TP + FN) = FN / P
 
     Args:
@@ -309,7 +319,8 @@ def ppv(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
     Positive Predictive Value for binary confusion matrices.
 
-    Formula:
+    Formula::
+
         PPV = TP / (TP + FP) = TP / TOP
 
     Args:
@@ -330,7 +341,8 @@ def npv(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
     Negative Predictive Value for binary confusion matrices.
 
-    Formula:
+    Formula::
+
         NPV = TN / (TN + FN) = TN / TON
 
     Args:
@@ -351,7 +363,8 @@ def fdr(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
     False Discovery Rate for binary confusion matrices.
 
-    Formula:
+    Formula::
+
         FDR = FP / (TP + FP) = FP / TOP = 1 - PPV
 
     Args:
@@ -368,7 +381,8 @@ def for_(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
     False Omission Rate for binary confusion matrices.
 
-    Formula:
+    Formula::
+
         FOR = FN / (TN + FN) = FN / TON = 1 - NPV
 
     Args:

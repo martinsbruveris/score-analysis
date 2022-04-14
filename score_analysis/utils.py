@@ -1,3 +1,6 @@
+"""
+This module contains internal utility functions.
+"""
 import numpy as np
 from scipy import stats
 

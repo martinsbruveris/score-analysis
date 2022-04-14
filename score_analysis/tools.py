@@ -16,7 +16,7 @@ def roc_with_ci(
     fpr: Optional[np.ndarray] = None,
     fnr: Optional[np.ndarray] = None,
     method: str = "pessimist",
-    alpha: float = 0.05
+    alpha: float = 0.05,
 ):
     """
     Convencience function to compute the ROC curve at given FPR or FNR values with a
@@ -29,12 +29,13 @@ def roc_with_ci(
     computed for the y-axis metric.
 
     We provide three methods for calculating confidence intervals.
-    - "bootstrap" will use the Scores.bootstrap_ci method to calculate the uncertainty
+
+    * "bootstrap" will use the Scores.bootstrap_ci method to calculate the uncertainty
       of the FPR -> threshold -> FNR (or other way round) mapping.
-    - "binomial" will use the ConfusionMatrix.fnr_ci method to calculate the uncertainty
+    * "binomial" will use the ConfusionMatrix.fnr_ci method to calculate the uncertainty
       of FNR at a fixed threshold assuming a binomial distribution of false negatives
       among all positives.
-    - "pessimist" will take the union of the above two methods, since "binomial" leads
+    * "pessimist" will take the union of the above two methods, since "binomial" leads
       to too small intervals in the high FNR range, while "bootstrap" is too confident
       in the low FNR range. This is the recommended method.
 
@@ -77,7 +78,10 @@ def roc_with_ci(
 
     if method in {"bootstrap", "pessimist"}:
         bootstrap_ci = scores.bootstrap_ci(
-            metric=metric, alpha=alpha, nb_samples=1000, method="replacement",
+            metric=metric,
+            alpha=alpha,
+            nb_samples=1000,
+            method="replacement",
         )
     else:
         bootstrap_ci = None

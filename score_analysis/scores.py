@@ -9,6 +9,10 @@ from .cm import BinaryConfusionMatrix
 
 
 class BinaryLabel(Enum):
+    """
+    Simple enum for positive and negative classes.
+    """
+
     pos = "pos"
     neg = "neg"
 
@@ -312,13 +316,16 @@ class Scores:
         Creates one bootstrap sample by sampling with the specified method.
 
         Supported methods are
-         - "replacement" creates a sample with the same number of positive and negative
-            scores using sampling with replacement.
-         - "proportion" creates a sample of size defined by ratio using sampling without
-            replacement. This is similar to cross-validation, where a proportion of data
-            is used in each iteration.
-        - A callable with signature
-              method(source: Scores) -> Scores
+
+        * "replacement" creates a sample with the same number of positive and negative
+          scores using sampling with replacement.
+        * "proportion" creates a sample of size defined by ratio using sampling without
+          replacement. This is similar to cross-validation, where a proportion of data
+          is used in each iteration.
+        * A callable with signature::
+
+            method(source: Scores) -> Scores
+
           creating one sample from a source Scores object.
 
         Args:
@@ -370,7 +377,8 @@ class Scores:
 
         Args:
             metric: Can be a string indicating a member function of the Scores class
-                or a callable with signature
+                or a callable with signature::
+
                     metric(sample: Scores) -> np.ndarray
             nb_samples: Number of samples to return
             method: Sampling method to create bootstrap sample. One of "replacement" or
@@ -407,7 +415,8 @@ class Scores:
 
         Args:
             metric: Can be a string indicating a member function of the Scores class
-                or a callable with signature
+                or a callable with signature::
+
                     metric(sample: Scores) -> Union[float, np.ndarray]
             alpha: Significance level. In range (0, 1).
             nb_samples: Number of samples to bootstrap

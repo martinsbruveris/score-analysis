@@ -23,8 +23,6 @@ class ConfusionMatrix:
     >>> cm = ConfusionMatrix(labels=labels, predictions=predictions)
     >>> cm.classes
     [0, 1, 2]
-    >>> cm.table
-    {0: {0: 3, 1: 0, 2: 0}, 1: {0: 0, 1: 1, 2: 2}, 2: {0: 2, 1: 1, 2: 3}}
     >>> cm2 = ConfusionMatrix(matrix={"a": {"a": 1, "b":2}, "b": {"a": 0, "b": 5}})
     >>> cm2.classes
     ["a", "b"]
@@ -41,10 +39,11 @@ class ConfusionMatrix:
     ):
         """
         A confusion matrix can be created in two ways:
-        * From labels, predictions and (optionally) weights
-        * From a matrix already containing necessary information
 
-        Creating a confusion matrix from labels and predictions
+          * From labels, predictions and (optionally) weights
+          * From a matrix already containing necessary information
+
+        *Creating a confusion matrix from labels and predictions*
 
         If classes are not provided, we use all values that appear as either labels or
         predictions, in sorted order, as classes.
@@ -53,9 +52,9 @@ class ConfusionMatrix:
         the same as the dtype of the weights vector otherwise. The default weights
         are 1 for all samples.
 
-        Creating a confusion matrix from a matrix
+        *Creating a confusion matrix from a matrix*
 
-        If matrix is a dict of dicss, we expect all entries to have the same set of
+        If matrix is a dict of dicts, we expect all entries to have the same set of
         keys, which will be used as classes. In this case the classes parameter can
         only be used to reorder the classes.
 
@@ -64,12 +63,12 @@ class ConfusionMatrix:
         only be used to reorder the classes.
 
         All other input types we attempt to convert to numpy arrays via np.asarray. The
-        class names are either taken from the provided parameter or set to 0, ..., n.
+        class names are either taken from the provided parameter or set to 0, ..., N.
 
-        Vectorized confusion matrices
+        *Vectorized confusion matrices*
 
         When creating the confusion matrix from a matrix, we can use a matrix of shape
-        (..., n, n) to represent a vectorized confusion matrix.
+        (..., N, N) to represent a vectorized confusion matrix.
         """
         if matrix is not None:
             if labels is not None:
@@ -187,7 +186,7 @@ class ConfusionMatrix:
 
     @property
     def nb_classes(self) -> int:
-        """Number of classes for confusion matrix"""
+        """Number of classes of confusion matrix"""
         return self.matrix.shape[-1]
 
     def one_vs_all(self) -> BinaryConfusionMatrix:
@@ -199,7 +198,7 @@ class ConfusionMatrix:
         cm[..., j] is the confusion matrix of class j (pos) against all other classes
         (neg).
 
-        The one-vs-all operation is _not_ idempotent. If we start with a binary
+        The one-vs-all operation is *not* idempotent. If we start with a binary
         confusion matrix, we will generate a vector of two matrices, so each class gets
         to play the role of the positive class.
 
@@ -380,10 +379,6 @@ class ConfusionMatrix:
 
 # noinspection PyMethodOverriding
 class BinaryConfusionMatrix(ConfusionMatrix):
-    """
-    Confusion matrix for two-class classifications.
-    """
-
     def __init__(
         self,
         labels=None,
@@ -394,6 +389,19 @@ class BinaryConfusionMatrix(ConfusionMatrix):
         pos_label=1,
         neg_label=0,
     ):
+        """
+        Confusion matrix for two-class classifications.
+
+        Binary confusion matrices are two-class confusion matrices, with the classes in
+        the order [positive, negative].
+
+        The main difference is that for a binary confusion matrix metrics, such as TPR,
+        etc. return *scalar* values, while for general confusion matrices they return
+        one value *per class*.
+
+        Binary confusion matrices can be created in the same way as general confusion
+        matrices, either using labels and predictions or by passing a matrix directly.
+        """
         super().__init__(
             labels=labels,
             predictions=predictions,

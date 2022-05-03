@@ -109,7 +109,7 @@ def roc_with_ci(
     else:
         # Take the worst ones
         lower = np.minimum(bootstrap_ci[:, 0], binomial_ci[:, 0])
-        upper = np.maximum(bootstrap_ci[:, 0], binomial_ci[:, 1])
+        upper = np.maximum(bootstrap_ci[:, 1], binomial_ci[:, 1])
 
     # Calculate the y-axis values
     if fnr is not None:

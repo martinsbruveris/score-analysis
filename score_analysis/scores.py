@@ -431,6 +431,6 @@ class Scores:
         samples = self.bootstrap_metric(
             metric, nb_samples=nb_samples, method=method, ratio=ratio
         )  # (N, Y)
-        ci = np.quantile(samples, q=[alpha / 2.0, (1 - alpha) / 2.0], axis=0)  # (2, Y)
+        ci = np.quantile(samples, q=[alpha / 2.0, 1 - alpha / 2.0], axis=0)  # (2, Y)
         ci = np.moveaxis(ci, source=0, destination=-1)  # (Y, 2)
         return ci

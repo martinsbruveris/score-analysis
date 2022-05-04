@@ -2,6 +2,8 @@
 
 ## Unpublished
 
+- Removed `BinaryConfusionMatrix` and absorbed the functionality in `ConfusionMatrix` 
+  using the parameter `binary=True`.
 - Reordered parameters in `Scores.from_labels` for consistency.
 
 ## v0.0.5 - 2022-05-02

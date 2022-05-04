@@ -129,19 +129,20 @@ matrix either from vectors with labels and predictions or directly from a matrix
            [0, 1, 2],
            [2, 1, 3]])
 
-A :code:`BinaryConfusionMatrix` is a special case of a :code:`ConfusionMatrix`, with
-specially designated positive and negative classes. The convention is that the classes
-are ordered :code:`classes = [pos, neg]`.
+A binary confusion matrix is a special case of a :code:`ConfusionMatrix`, with specially
+designated positive and negative classes. The convention is that the classes are
+ordered :code:`classes = [pos, neg]`. It can be created with the parameter
+:code:`binary=True`.
 
 For binary confusion matrices all metrics such as TPR are scalar. Since we have defined
 which is the positive class, there is no need to use the one-vs-all strategy.
 
-A :code:`BinaryConfusionMatrix` is different from a :code:`ConfusionMatrix` with two
-classes, since the latter does not have designated positive and negative classes
+A binary confusion matrix is different from a regular confusion matrix with two classes,
+since the latter does not have designated positive and negative classes.
 
 .. code-block:: python
 
-    >>> cm = BinaryConfusionMatrix(matrix=[[1, 4], [2, 3]])
+    >>> cm = ConfusionMatrix(matrix=[[1, 4], [2, 3]], binary=True)
     >>> cm.tpr()
     0.2
     >>> cm = ConfusionMatrix(matrix=[[1, 4], [2, 3]])

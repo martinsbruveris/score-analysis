@@ -122,18 +122,18 @@ array([[3, 0, 0],
        [2, 1, 3]])
 ```
 
-A `BinaryConfusionMatrix` is a special case of a `ConfusionMatrix`, with specially
+A binary confusion matrix is a special case of a `ConfusionMatrix`, with specially
 designated positive and negative classes. The convention is that the classes are
-ordered `classes = [pos, neg]`.
+ordered `classes = [pos, neg]`. It can be created with the parameter `binary=True`.
 
 For binary confusion matrices all metrics such as TPR are scalar. Since we have defined
 which is the positive class, there is no need to use the one-vs-all strategy.
 
-A `BinaryConfusionMatrix` is different from a `ConfusionMatrix` with two classes, since
-the latter does not have designated positive and negative classes
+A binary confusion matrix is different from a regular confusion matrix with two classes,
+since the latter does not have designated positive and negative classes.
 
 ```python
->>> cm = BinaryConfusionMatrix(matrix=[[1, 4], [2, 3]])
+>>> cm = ConfusionMatrix(matrix=[[1, 4], [2, 3]], binary=True)
 >>> cm.tpr()
 0.2
 >>> cm = ConfusionMatrix(matrix=[[1, 4], [2, 3]])

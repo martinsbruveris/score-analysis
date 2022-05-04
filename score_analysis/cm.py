@@ -11,6 +11,39 @@ import pandas as pd
 from . import metrics
 
 
+def cm_class_metric(metric=None, axis: int = -1):
+    """
+    Wrapper for a per-class metric to ensure that
+    - We simply call the metric for binary confusion matrices
+    - We call the metric on the one_vs_all() matrix for multi-class matrices
+    - We correctly apply the as_dict parameter.
+
+    Args:
+        metric: Callable with signature metric(self, as_dict), implementing the metric
+            on a binary confusion matrix.
+        axis: Axis in which
+
+    Returns:
+        Callable with the same signature implementing the metric for general confusion
+        matrices and the as_dict paramter.
+    """
+
+    def decorator(_metric):
+        def wrapper(self: ConfusionMatrix, *args, as_dict: bool = False, **kwargs):
+            if self.binary and as_dict:
+                raise ValueError("Cannot return as dict with binary matrices.")
+            cm = self if self.binary else self.one_vs_all()
+            res = _metric(cm, *args, **kwargs)
+            return self._class_metric_as_dict(res, axis=axis) if as_dict else res
+
+        return wrapper
+
+    if metric is not None:
+        return decorator(metric)
+    else:
+        return decorator
+
+
 # TODO: Output format pandas dataframe
 # TODO: Output format numpy array
 # TODO: Output format table (dict of dicts)
@@ -36,6 +69,7 @@ class ConfusionMatrix:
         weights=None,
         matrix=None,
         classes=None,
+        binary: bool = False,
     ):
         """
         A confusion matrix can be created in two ways:
@@ -49,8 +83,8 @@ class ConfusionMatrix:
         predictions, in sorted order, as classes.
 
         The dtype of the confusion matrix is int if no weights vector is provided and
-        the same as the dtype of the weights vector otherwise. The default weights
-        are 1 for all samples.
+        the same as the dtype of the weights vector otherwise. The default weight is
+        1 for all samples.
 
         *Creating a confusion matrix from a matrix*
 
@@ -69,6 +103,17 @@ class ConfusionMatrix:
 
         When creating the confusion matrix from a matrix, we can use a matrix of shape
         (..., N, N) to represent a vectorized confusion matrix.
+
+        *Binary confusion matrices*
+
+        Binary confusion matrices are two-class confusion matrices, with the classes in
+        the order [positive, negative]. The default labels are [1, 0]. Note that this
+        is different from the default labels for a two-class non-binary confusion
+        matrix, for which the default labels would be [0, 1].
+
+        The main difference is that for a binary confusion matrix metrics, such as TPR,
+        etc. return *scalar* values, while for general confusion matrices they return
+        one value *per class*.
         """
         if matrix is not None:
             if labels is not None:
@@ -78,7 +123,9 @@ class ConfusionMatrix:
             if weights is not None:
                 raise ValueError("Cannot provide sample_weight and matrix.")
 
-            self.matrix, self.classes = self._assign_from_matrix(matrix, classes)
+            self.matrix, self.classes = self._assign_from_matrix(
+                matrix=matrix, classes=classes, binary=binary
+            )
         else:
             if labels is None:
                 raise ValueError("Must provide labels.")
@@ -86,8 +133,10 @@ class ConfusionMatrix:
                 raise ValueError("Must provide predictions.")
 
             self.matrix, self.classes = self._assign_from_predictions(
-                labels, predictions, weights, classes
+                labels, predictions, weights, classes, binary
             )
+
+        self.binary = binary
 
         # Input checks
         if self.matrix.ndim < 2:
@@ -100,9 +149,11 @@ class ConfusionMatrix:
             raise ValueError("Number of classes must be compatible with matrix.")
         if len(set(self.classes)) != len(self.classes):
             raise ValueError("Class names must be unique.")
+        if self.binary and len(self.classes) != 2:
+            raise ValueError("Binary confusion matrices must have exactly two classes.")
 
     @staticmethod
-    def _assign_from_matrix(matrix, classes):
+    def _assign_from_matrix(matrix, classes, binary):
         """Creates confusion matrix from a matrix represenations."""
         if isinstance(matrix, dict):  # Dict of dicts
             if classes is not None:
@@ -147,20 +198,28 @@ class ConfusionMatrix:
             if classes is not None:
                 classes = np.asarray(classes)
             else:
-                classes = list(range(matrix.shape[-1]))
+                if not binary:
+                    classes = np.asarray(list(range(matrix.shape[-1])))
+                else:
+                    # Binary CMs order classes as [positive, negative]
+                    classes = np.array([1, 0])
 
         return matrix, classes
 
     @staticmethod
-    def _assign_from_predictions(labels, predictions, weights, classes):
+    def _assign_from_predictions(labels, predictions, weights, classes, binary):
         """Creates confusion matrix from labels and predictions."""
         labels = np.asarray(labels)
         predictions = np.asarray(predictions)
 
         if classes is None:
-            classes = np.unique(
-                np.concatenate([np.unique(labels), np.unique(predictions)])
-            )
+            if not binary:
+                classes = np.unique(
+                    np.concatenate([np.unique(labels), np.unique(predictions)])
+                )
+            else:
+                # Binary CMs order classes as [positive, negative]
+                classes = np.array([1, 0])
         else:
             classes = np.asarray(classes)
         idx_map = {c: i for i, c in enumerate(classes)}
@@ -182,14 +241,16 @@ class ConfusionMatrix:
         """
         Returns confusion matrix at given index.
         """
-        return ConfusionMatrix(matrix=self.matrix[item], classes=self.classes)
+        return ConfusionMatrix(
+            matrix=self.matrix[item], classes=self.classes, binary=self.binary
+        )
 
     @property
     def nb_classes(self) -> int:
         """Number of classes of confusion matrix"""
-        return self.matrix.shape[-1]
+        return len(self.classes)
 
-    def one_vs_all(self) -> BinaryConfusionMatrix:
+    def one_vs_all(self) -> ConfusionMatrix:
         """
         Binarizes the confusion matrix using one-vs-all strategy.
 
@@ -218,16 +279,17 @@ class ConfusionMatrix:
             matrix[..., j, 1, 1] = np.sum(self.matrix, axis=(-1, -2)) - np.sum(
                 matrix[..., j, :, :], axis=(-1, -2)
             )
-        return BinaryConfusionMatrix(matrix=matrix)
+        return ConfusionMatrix(matrix=matrix, binary=True)
 
-    def _class_metric_as_dict(self, arr: np.ndarray) -> dict:
+    def _class_metric_as_dict(self, arr: np.ndarray, axis: int = -1) -> dict:
         """
         Converts per-class metrics in array form to dict.
 
-        We assume that arr is array of shape (..., N). The dictionary has classes as
-        keys and arrays of shape (...) as values.
+        We assume that arr is array of shape (X, N, Y), where the metric is present
+        in the defined axis. The dictionary has classes as keys and arrays of shape
+        (X, Y) as values.
         """
-        res = {c: arr[..., j] for j, c in enumerate(self.classes)}
+        res = {c: np.take(arr, j, axis=axis) for j, c in enumerate(self.classes)}
         return res
 
     def pop(self) -> float:
@@ -242,250 +304,120 @@ class ConfusionMatrix:
         """Error Rate"""
         return metrics.error_rate(self.matrix)
 
-    def tp(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
+    @cm_class_metric
+    def tp(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """True Positves"""
-        res = metrics.tp(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def tn(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """True Negatives"""
-        res = metrics.tn(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def fp(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """False Positives"""
-        res = metrics.fp(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def fn(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """False Negatives"""
-        res = metrics.fn(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def p(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """Condition Positve"""
-        res = metrics.p(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def n(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """Condition Negative"""
-        res = metrics.n(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def top(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """Test Outcome Positive"""
-        res = metrics.top(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def ton(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """Test Outcome Negative"""
-        res = metrics.ton(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def tpr(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """True Positve Rate"""
-        res = metrics.tpr(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def tnr(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """True Negative Rate"""
-        res = metrics.tnr(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def fpr(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """False Positive Rate"""
-        res = metrics.fpr(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def fnr(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """False Negative Rate"""
-        res = metrics.fnr(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def tpr_ci(
-        self, alpha: float = 0.05, as_dict: bool = False
-    ) -> Union[dict, np.ndarray]:
-        """True Positive Rate confidence interval"""
-        res = metrics.tpr_ci(self.one_vs_all().matrix, alpha=alpha)  # (..., N, 2)
-        if as_dict:
-            res = np.swapaxes(res, -1, -2)  # (..., 2, N)
-            return self._class_metric_as_dict(res)
-        else:
-            return res
-
-    def tnr_ci(
-        self, alpha: float = 0.05, as_dict: bool = False
-    ) -> Union[dict, np.ndarray]:
-        """True Negative Rate confidence interval"""
-        res = metrics.tnr_ci(self.one_vs_all().matrix, alpha=alpha)  # (..., N, 2)
-        if as_dict:
-            res = np.swapaxes(res, -1, -2)  # (..., 2, N)
-            return self._class_metric_as_dict(res)
-        else:
-            return res
-
-    def fpr_ci(
-        self, alpha: float = 0.05, as_dict: bool = False
-    ) -> Union[dict, np.ndarray]:
-        """False Positive Rate confidence interval"""
-        res = metrics.fpr_ci(self.one_vs_all().matrix, alpha=alpha)  # (..., N, 2)
-        if as_dict:
-            res = np.swapaxes(res, -1, -2)  # (..., 2, N)
-            return self._class_metric_as_dict(res)
-        else:
-            return res
-
-    def fnr_ci(
-        self, alpha: float = 0.05, as_dict: bool = False
-    ) -> Union[dict, np.ndarray]:
-        """False Negative Rate confidence interval"""
-        res = metrics.fnr_ci(self.one_vs_all().matrix, alpha=alpha)  # (..., N, 2)
-        if as_dict:
-            res = np.swapaxes(res, -1, -2)  # (..., 2, N)
-            return self._class_metric_as_dict(res)
-        else:
-            return res
-
-    def ppv(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """Positive Predictive Value"""
-        res = metrics.ppv(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def npv(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """Negative Predictive Value"""
-        res = metrics.npv(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def fdr(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """False Discovery Rate"""
-        res = metrics.fdr(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def for_(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """False Omission Rate"""
-        res = metrics.for_(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def class_accuracy(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """Class Accuracy"""
-        res = metrics.accuracy(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-    def class_error_rate(self, as_dict: bool = False) -> Union[dict, np.ndarray]:
-        """Class Error Rate"""
-        res = metrics.error_rate(self.one_vs_all().matrix)
-        return self._class_metric_as_dict(res) if as_dict else res
-
-
-# noinspection PyMethodOverriding
-class BinaryConfusionMatrix(ConfusionMatrix):
-    def __init__(
-        self,
-        labels=None,
-        predictions=None,
-        *,
-        weights=None,
-        matrix=None,
-        pos_label=1,
-        neg_label=0,
-    ):
-        """
-        Confusion matrix for two-class classifications.
-
-        Binary confusion matrices are two-class confusion matrices, with the classes in
-        the order [positive, negative].
-
-        The main difference is that for a binary confusion matrix metrics, such as TPR,
-        etc. return *scalar* values, while for general confusion matrices they return
-        one value *per class*.
-
-        Binary confusion matrices can be created in the same way as general confusion
-        matrices, either using labels and predictions or by passing a matrix directly.
-        """
-        super().__init__(
-            labels=labels,
-            predictions=predictions,
-            weights=weights,
-            matrix=matrix,
-            classes=[pos_label, neg_label],
-        )
-
-    def tp(self) -> float:
-        """True Positives"""
         return metrics.tp(self.matrix)
 
-    def tn(self) -> float:
+    @cm_class_metric
+    def tn(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """True Negatives"""
         return metrics.tn(self.matrix)
 
-    def fp(self) -> float:
+    @cm_class_metric
+    def fp(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """False Positives"""
         return metrics.fp(self.matrix)
 
-    def fn(self) -> float:
+    @cm_class_metric
+    def fn(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """False Negatives"""
         return metrics.fn(self.matrix)
 
-    def p(self) -> float:
-        """Condition Positive"""
+    @cm_class_metric
+    def p(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
+        """Condition Positve"""
         return metrics.p(self.matrix)
 
-    def n(self) -> float:
+    @cm_class_metric
+    def n(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """Condition Negative"""
         return metrics.n(self.matrix)
 
-    def top(self) -> float:
+    @cm_class_metric
+    def top(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """Test Outcome Positive"""
         return metrics.top(self.matrix)
 
-    def ton(self) -> float:
+    @cm_class_metric
+    def ton(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """Test Outcome Negative"""
         return metrics.ton(self.matrix)
 
-    def tpr(self) -> float:
+    @cm_class_metric
+    def tpr(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """True Positve Rate"""
         return metrics.tpr(self.matrix)
 
-    def tnr(self) -> float:
+    @cm_class_metric
+    def tnr(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """True Negative Rate"""
         return metrics.tnr(self.matrix)
 
-    def fpr(self) -> float:
+    @cm_class_metric
+    def fpr(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """False Positive Rate"""
         return metrics.fpr(self.matrix)
 
-    def fnr(self) -> float:
+    @cm_class_metric
+    def fnr(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """False Negative Rate"""
         return metrics.fnr(self.matrix)
 
-    def tpr_ci(self, alpha: float = 0.05) -> np.ndarray:
-        """True Positve Rate confidence interval"""
+    @cm_class_metric(axis=-2)
+    def tpr_ci(
+        self, alpha: float = 0.05, *, as_dict: bool = False
+    ) -> Union[dict, float, np.ndarray]:
+        """True Positive Rate confidence interval"""
         return metrics.tpr_ci(self.matrix, alpha=alpha)
 
-    def tnr_ci(self, alpha: float = 0.05) -> np.ndarray:
+    @cm_class_metric(axis=-2)
+    def tnr_ci(
+        self, alpha: float = 0.05, *, as_dict: bool = False
+    ) -> Union[dict, float, np.ndarray]:
         """True Negative Rate confidence interval"""
         return metrics.tnr_ci(self.matrix, alpha=alpha)
 
-    def fpr_ci(self, alpha: float = 0.05) -> np.ndarray:
-        """False Positve Rate confidence interval"""
+    @cm_class_metric(axis=-2)
+    def fpr_ci(
+        self, alpha: float = 0.05, *, as_dict: bool = False
+    ) -> Union[dict, float, np.ndarray]:
+        """False Positive Rate confidence interval"""
         return metrics.fpr_ci(self.matrix, alpha=alpha)
 
-    def fnr_ci(self, alpha: float = 0.05) -> np.ndarray:
+    @cm_class_metric(axis=-2)
+    def fnr_ci(
+        self, alpha: float = 0.05, *, as_dict: bool = False
+    ) -> Union[dict, float, np.ndarray]:
         """False Negative Rate confidence interval"""
         return metrics.fnr_ci(self.matrix, alpha=alpha)
 
-    def ppv(self) -> float:
+    @cm_class_metric
+    def ppv(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """Positive Predictive Value"""
         return metrics.ppv(self.matrix)
 
-    def npv(self) -> float:
+    @cm_class_metric
+    def npv(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """Negative Predictive Value"""
         return metrics.npv(self.matrix)
 
-    def fdr(self) -> float:
+    @cm_class_metric
+    def fdr(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """False Discovery Rate"""
         return metrics.fdr(self.matrix)
 
-    def for_(self) -> float:
+    @cm_class_metric
+    def for_(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """False Omission Rate"""
         return metrics.for_(self.matrix)
+
+    @cm_class_metric
+    def class_accuracy(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
+        """Class Accuracy"""
+        return metrics.accuracy(self.matrix)
+
+    @cm_class_metric
+    def class_error_rate(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
+        """Class Error Rate"""
+        return metrics.error_rate(self.matrix)

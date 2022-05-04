@@ -5,7 +5,7 @@ from typing import Any, Callable, Optional, Tuple, Union
 
 import numpy as np
 
-from .cm import BinaryConfusionMatrix
+from .cm import ConfusionMatrix
 
 
 class BinaryLabel(Enum):
@@ -45,8 +45,8 @@ class Scores:
 
     @staticmethod
     def from_labels(
-        scores,
         labels,
+        scores,
         *,
         pos_label: Any = 1,
         score_class: Union[BinaryLabel, str] = "pos",
@@ -54,8 +54,8 @@ class Scores:
     ) -> Scores:
         """
         Args:
-            scores: Array with sample scores
             labels: Array with sample labels
+            scores: Array with sample scores
             pos_label: The label of the positive class. All other labels are treated as
                 negative labels.
             score_class: Do scores indicate membership of the positive or the negative
@@ -66,8 +66,8 @@ class Scores:
         Returns:
             A Scores instance.
         """
-        scores = np.asarray(scores)
         labels = np.asarray(labels)
+        scores = np.asarray(scores)
         pos = scores[labels == pos_label]
         neg = scores[labels != pos_label]
         return Scores(pos, neg, score_class=score_class, equal_class=equal_class)
@@ -91,7 +91,7 @@ class Scores:
         )
         return equal
 
-    def cm(self, threshold) -> BinaryConfusionMatrix:
+    def cm(self, threshold) -> ConfusionMatrix:
         """
         Computes confusion matrices at the given threshold(s).
 
@@ -99,7 +99,7 @@ class Scores:
             threshold: Can be a scalar or array-like.
 
         Returns:
-            A BinaryConfusionMatrix.
+            A binary confusion matrix.
         """
         threshold = np.asarray(threshold)
 
@@ -127,7 +127,7 @@ class Scores:
         matrix[..., 1, 0] = fp
         matrix[..., 1, 1] = tn
 
-        return BinaryConfusionMatrix(matrix=matrix)
+        return ConfusionMatrix(matrix=matrix, binary=True)
 
     confusion_matrix = cm
 
@@ -341,6 +341,13 @@ class Scores:
                 # Sampling a sample of the same size with replacement
                 pos = np.random.choice(self.pos, size=self.pos.size, replace=True)
                 neg = np.random.choice(self.neg, size=self.neg.size, replace=True)
+                # This code also takes into account uncertainty about the pos : neg
+                # ratio in the bootstrapped sample. Not used at the moment.
+                # n = self.pos.size + self.neg.size
+                # p = self.pos.size / n
+                # nb_pos = np.random.binomial(n, p)
+                # pos = np.random.choice(self.pos, size=nb_pos, replace=True)
+                # neg = np.random.choice(self.neg, size=n - nb_pos, replace=True)
             elif method == "proportion":
                 if ratio is None:
                     raise ValueError(

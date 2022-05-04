@@ -1,5 +1,13 @@
 # Change Log
 
+## Unpublished
+
+- Reordered parameters in `Scores.from_labels` for consistency.
+
+## v0.0.5 - 2022-05-02
+
+- Fixed bug in bootstrapping code
+
 ## v0.0.4 - 2022-04-08
 
 - Add bootstrapping to compute confidence interval for Scores

@@ -5,7 +5,7 @@ from score_analysis.scores import Scores
 
 
 def test_from_labels():
-    scores = Scores.from_labels(scores=[3, 2, 1], labels=[2, 2, 3], pos_label=2)
+    scores = Scores.from_labels(labels=[2, 2, 3], scores=[3, 2, 1], pos_label=2)
     np.testing.assert_equal(scores.pos, [2, 3])
     np.testing.assert_equal(scores.neg, [1])
 

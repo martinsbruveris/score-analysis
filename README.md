@@ -43,10 +43,11 @@ from score_analysis import Scores
 
 # If we have the scores for the positive and negative classes separately
 scores = Scores(pos=[1, 2, 3], neg=[0.5, 1.5])
+
 # If we have an intermingled set of scores and labels
 scores = Scores.from_labels(
-    scores=[1, 2, 3, 0.5, 1.5], 
     labels=[1, 1, 1, 0, 0],
+    scores=[1, 2, 3, 0.5, 1.5], 
     # We specify the label of the positive class. All other labels are assigned to
     # the negative class.
     pos_label=1,  

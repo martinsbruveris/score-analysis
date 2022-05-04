@@ -45,8 +45,8 @@ class Scores:
 
     @staticmethod
     def from_labels(
-        scores,
         labels,
+        scores,
         *,
         pos_label: Any = 1,
         score_class: Union[BinaryLabel, str] = "pos",
@@ -54,8 +54,8 @@ class Scores:
     ) -> Scores:
         """
         Args:
-            scores: Array with sample scores
             labels: Array with sample labels
+            scores: Array with sample scores
             pos_label: The label of the positive class. All other labels are treated as
                 negative labels.
             score_class: Do scores indicate membership of the positive or the negative
@@ -66,8 +66,8 @@ class Scores:
         Returns:
             A Scores instance.
         """
-        scores = np.asarray(scores)
         labels = np.asarray(labels)
+        scores = np.asarray(scores)
         pos = scores[labels == pos_label]
         neg = scores[labels != pos_label]
         return Scores(pos, neg, score_class=score_class, equal_class=equal_class)

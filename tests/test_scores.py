@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from score_analysis.scores import Scores
+from score_analysis.scores import Scores, pointwise_cm
 
 
 def test_from_labels():
@@ -255,3 +255,61 @@ def test_bootstrap_ci():
     for j in range(nb_samples):
         np.testing.assert_equal(ci[..., 0], eer)
         np.testing.assert_equal(ci[..., 1], eer)
+
+
+def test_pointwise_cm():
+    cm = pointwise_cm(
+        labels=[1, 1, 0, 0],
+        scores=[1, 0, 1, 0],
+        threshold=1.0,
+        score_class="pos",
+        equal_class="pos",
+    )
+    assert cm.shape == (4, 2, 2)
+    np.testing.assert_equal(cm[0], [[1, 0], [0, 0]])
+    np.testing.assert_equal(cm[1], [[0, 1], [0, 0]])
+    np.testing.assert_equal(cm[2], [[0, 0], [1, 0]])
+    np.testing.assert_equal(cm[3], [[0, 0], [0, 1]])
+
+    cm = pointwise_cm(
+        labels=[1, 1, 0, 0],
+        scores=[1, 0, 1, 0],
+        threshold=0.0,
+        score_class="pos",
+        equal_class="neg",
+    )
+    np.testing.assert_equal(cm[0], [[1, 0], [0, 0]])
+    np.testing.assert_equal(cm[1], [[0, 1], [0, 0]])
+    np.testing.assert_equal(cm[2], [[0, 0], [1, 0]])
+    np.testing.assert_equal(cm[3], [[0, 0], [0, 1]])
+
+    cm = pointwise_cm(
+        labels=[1, 1, 0, 0],
+        scores=[1, 0, 1, 0],
+        threshold=0.0,
+        score_class="neg",
+        equal_class="pos",
+    )
+    np.testing.assert_equal(cm[0], [[0, 1], [0, 0]])
+    np.testing.assert_equal(cm[1], [[1, 0], [0, 0]])
+    np.testing.assert_equal(cm[2], [[0, 0], [0, 1]])
+    np.testing.assert_equal(cm[3], [[0, 0], [1, 0]])
+
+    cm = pointwise_cm(
+        labels=[1, 1, 0, 0],
+        scores=[1, 0, 1, 0],
+        threshold=1.0,
+        score_class="neg",
+        equal_class="neg",
+    )
+    np.testing.assert_equal(cm[0], [[0, 1], [0, 0]])
+    np.testing.assert_equal(cm[1], [[1, 0], [0, 0]])
+    np.testing.assert_equal(cm[2], [[0, 0], [0, 1]])
+    np.testing.assert_equal(cm[3], [[0, 0], [1, 0]])
+
+
+def test_pointwise_cm_shape():
+    cm = pointwise_cm(
+        labels=np.zeros((3, 4)), scores=np.zeros((3, 4)), threshold=np.zeros((5, 1))
+    )
+    assert cm.shape == (3, 4, 5, 1, 2, 2)

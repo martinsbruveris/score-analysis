@@ -441,3 +441,82 @@ class Scores:
         ci = np.quantile(samples, q=[alpha / 2.0, 1 - alpha / 2.0], axis=0)  # (2, Y)
         ci = np.moveaxis(ci, source=0, destination=-1)  # (Y, 2)
         return ci
+
+
+def pointwise_cm(
+    labels,
+    scores,
+    threshold,
+    *,
+    pos_label: Any = 1,
+    score_class: Union[BinaryLabel, str] = "pos",
+    equal_class: Union[BinaryLabel, str] = "pos",
+) -> np.ndarray:
+    """
+    Returns a boolean array, stating for each score, in which field of the confusion
+    matrix it belongs at a given threshold.
+
+    If scores have shape (X,), threshold has shape (Y,), then we return an array of
+    shape (X, Y, 2, 2).
+
+    Args:
+        labels: Array with sample labels
+        scores: Array with sample scores
+        threshold: Thresholds at which to classify scores
+        pos_label: The label of the positive class. All other labels are treated as
+            negative labels.
+        score_class: Do scores indicate membership of the positive or the negative
+            class?
+        equal_class: Do samples with score equal to the threshold get assigned to
+            the positive or negative class?
+
+    Returns:
+        Boolean array of shape (X, Y, 2, 2) specifying whether a given sample at a
+        given threshold belongs in a given cell of the confusion matrix.
+    """
+    labels = np.asarray(labels)
+    scores = np.asarray(scores)
+    threshold = np.asarray(threshold)
+    score_class = BinaryLabel(score_class)
+    equal_class = BinaryLabel(equal_class)
+
+    # Save the shape and flatten objects
+    scores_shape = scores.shape
+    labels = np.reshape(labels, -1)
+    labels = labels[:, np.newaxis]
+    scores = np.reshape(scores, -1)
+    scores = scores[:, np.newaxis]
+    threshold_shape = threshold.shape
+    threshold = np.reshape(threshold, -1)
+    threshold = threshold[np.newaxis, :]
+
+    # True labels
+    pos = labels == pos_label
+    neg = labels != pos_label
+
+    # Predicted labels
+    if score_class == BinaryLabel.pos and equal_class == BinaryLabel.pos:
+        top = scores >= threshold  # Test Outcome Positive
+        ton = scores < threshold  # Test Outcome Negative
+    elif score_class == BinaryLabel.pos and equal_class == BinaryLabel.neg:
+        top = scores > threshold
+        ton = scores <= threshold
+    elif score_class == BinaryLabel.neg and equal_class == BinaryLabel.pos:
+        top = scores <= threshold
+        ton = scores > threshold
+    else:  # score_class == BinaryLabel.neg and equal_class == BinaryLabel.neg
+        top = scores < threshold
+        ton = scores >= threshold
+
+    # The confusion matrix
+    cm = np.empty((scores.size, threshold.size, 2, 2), dtype=bool)
+    cm[..., 0, 0] = pos & top
+    cm[..., 0, 1] = pos & ton
+    cm[..., 1, 0] = neg & top
+    cm[..., 1, 1] = neg & ton
+
+    # Restore shapes
+    cm = np.reshape(cm, (-1, *threshold_shape, 2, 2))
+    cm = np.reshape(cm, (*scores_shape, *threshold_shape, 2, 2))
+
+    return cm

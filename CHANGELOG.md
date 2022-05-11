@@ -1,6 +1,6 @@
 # Change Log
 
-## Unpublished
+## v0.1.0 - 2022-05-11
 
 - Improved ROC curve CI calculation.
 - Added parameter `bootstrap_method` in `Scores.bootstrap_ci` allowing calculation

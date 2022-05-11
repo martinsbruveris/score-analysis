@@ -5,6 +5,7 @@ from typing import Any, Callable, Optional, Tuple, Union
 
 import numpy as np
 
+from . import utils
 from .cm import ConfusionMatrix
 
 
@@ -90,6 +91,21 @@ class Scores:
             and self.equal_class == other.equal_class
         )
         return equal
+
+    def swap(self) -> Scores:
+        """
+        Swaps positive and negative scores. Also reverses the decision logic, so that
+        fpr of original scores equals fnr of reversed scores.
+
+        Returns:
+            Scores object with positive and negative scores reversed.
+        """
+        return Scores(
+            pos=self.neg,
+            neg=self.pos,
+            score_class="neg" if self.score_class == BinaryLabel.pos else "pos",
+            equal_class="neg" if self.equal_class == BinaryLabel.pos else "pos",
+        )
 
     def cm(self, threshold) -> ConfusionMatrix:
         """
@@ -336,34 +352,36 @@ class Scores:
         Returns:
             Scores object with the sampled scores.
         """
-        if isinstance(method, str):
-            if method == "replacement":
-                # Sampling a sample of the same size with replacement
-                pos = np.random.choice(self.pos, size=self.pos.size, replace=True)
-                neg = np.random.choice(self.neg, size=self.neg.size, replace=True)
-                # This code also takes into account uncertainty about the pos : neg
-                # ratio in the bootstrapped sample. Not used at the moment.
-                # n = self.pos.size + self.neg.size
-                # p = self.pos.size / n
-                # nb_pos = np.random.binomial(n, p)
-                # pos = np.random.choice(self.pos, size=nb_pos, replace=True)
-                # neg = np.random.choice(self.neg, size=n - nb_pos, replace=True)
-            elif method == "proportion":
-                if ratio is None:
-                    raise ValueError(
-                        "For proportional sampling, ratio has to be defined."
-                    )
-                # Sampling a sample defined by ratio, without replacement
-                pos_size = max(int(ratio * self.pos.size), 1)
-                pos = np.random.choice(self.pos, size=pos_size, replace=False)
-                neg_size = max(int(ratio * self.neg.size), 1)
-                neg = np.random.choice(self.neg, size=neg_size, replace=False)
-            else:
-                raise ValueError(f"Unsupported sampling method {method}.")
+        if method == "replacement":
+            # Sampling a sample of the same size with replacement
+            pos = np.random.choice(self.pos, size=self.pos.size, replace=True)
+            neg = np.random.choice(self.neg, size=self.neg.size, replace=True)
+
+            # This code also takes into account uncertainty about the pos : neg
+            # ratio in the bootstrapped sample. Not used at the moment.
+            # n = self.pos.size + self.neg.size
+            # p = self.pos.size / n
+            # nb_pos = np.random.binomial(n, p)
+            # pos = np.random.choice(self.pos, size=nb_pos, replace=True)
+            # neg = np.random.choice(self.neg, size=n - nb_pos, replace=True)
 
             scores = Scores(
                 pos, neg, score_class=self.score_class, equal_class=self.equal_class
             )
+        elif method == "proportion":
+            if ratio is None:
+                raise ValueError("For proportional sampling, ratio has to be defined.")
+            # Sampling a sample defined by ratio, without replacement
+            pos_size = max(int(ratio * self.pos.size), 1)
+            pos = np.random.choice(self.pos, size=pos_size, replace=False)
+            neg_size = max(int(ratio * self.neg.size), 1)
+            neg = np.random.choice(self.neg, size=neg_size, replace=False)
+
+            scores = Scores(
+                pos, neg, score_class=self.score_class, equal_class=self.equal_class
+            )
+        elif isinstance(method, str):
+            raise ValueError(f"Unsupported sampling method {method}.")
         elif callable(method):
             scores = method(self)  # Custom sampling method
         else:
@@ -413,7 +431,8 @@ class Scores:
         alpha: float = 0.05,
         *,
         nb_samples: int = 1000,
-        method: Union[str, Callable] = "replacement",
+        bootstrap_method: str = "quantile",
+        sampling_method: Union[str, Callable] = "replacement",
         ratio: Optional[float] = None,
     ) -> np.ndarray:
         """
@@ -427,19 +446,38 @@ class Scores:
                     metric(sample: Scores) -> Union[float, np.ndarray]
             alpha: Significance level. In range (0, 1).
             nb_samples: Number of samples to bootstrap
-            method: Sampling method to create bootstrap sample. One of "replacement" or
-                "proportion".
+            bootstrap_method: Method to compute the CI from the bootstrap samples.
+                Possible values are
+
+                * "quantile" uses the alpha/2 and 1-alpha/2 quantiles of the
+                  empirical metric distribution.
+                * "bc" applies bias correction to correct for the bias of the median
+                  of the empirical distribution
+                * "bca" applies bias correction and acceleration to correct for non-
+                  constant standard error.
+
+                See Ch. 11 of Computer Age Statistical Inference by Efron and Hastie
+                for details.
+            sampling_method: Sampling method to create bootstrap sample. One of
+                "replacement" or "proportion". Or a callable with signature::
+
+                    sampling_method(scores: Scores) -> Scores
+
+                generating one bootstrap sample from a given Scores object.
             ratio: Size of sample when using proportional sampling. In range (0, 1).
 
         Returns:
             Returns an array of shape (Y, 2) with lower and upper bounds of the CI, for
             a metric returning shape (Y,).
         """
+        if isinstance(metric, str):
+            metric = getattr(Scores, metric)
         samples = self.bootstrap_metric(
-            metric, nb_samples=nb_samples, method=method, ratio=ratio
+            metric, nb_samples=nb_samples, method=sampling_method, ratio=ratio
         )  # (N, Y)
-        ci = np.quantile(samples, q=[alpha / 2.0, 1 - alpha / 2.0], axis=0)  # (2, Y)
-        ci = np.moveaxis(ci, source=0, destination=-1)  # (Y, 2)
+        ci = utils.bootstrap_ci(
+            theta=samples, theta_hat=metric(self), alpha=alpha, method=bootstrap_method
+        )
         return ci
 
 

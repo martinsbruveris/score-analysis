@@ -1,9 +1,11 @@
 """
 This module contains tools that can be useful in various applications but are somewhat
 less fundemental than, e.g., the ConfusionMatrix class.
+
+We make fewer promises about the backwards compatibility of the functions in this
+module.
 """
-from functools import partial
-from typing import Optional
+from typing import Callable, Optional, Tuple, Union
 
 import numpy as np
 
@@ -15,8 +17,10 @@ def roc_with_ci(
     *,
     fpr: Optional[np.ndarray] = None,
     fnr: Optional[np.ndarray] = None,
-    method: str = "pessimist",
     alpha: float = 0.05,
+    nb_samples: int = 1000,
+    bootstrap_method: str = "bca",
+    sampling_method: Union[str, Callable] = "replacement",
 ):
     """
     Convencience function to compute the ROC curve at given FPR or FNR values with a
@@ -25,27 +29,19 @@ def roc_with_ci(
     There are two ways to plot an ROC curve, depending on which metric (FPR or FNR) ir
     plotted on the x-axis. We expect the user to provide either FPR or FNR values (but
     not both). The provided values are plotted on the x-axis and used to set a threshold
-    and then compute the other metric at those thresholds. The confidence interval is
-    computed for the y-axis metric.
-
-    We provide three methods for calculating confidence intervals.
-
-    * "bootstrap" will use the Scores.bootstrap_ci method to calculate the uncertainty
-      of the FPR -> threshold -> FNR (or other way round) mapping.
-    * "binomial" will use the ConfusionMatrix.fnr_ci method to calculate the uncertainty
-      of FNR at a fixed threshold assuming a binomial distribution of false negatives
-      among all positives.
-    * "pessimist" will take the union of the above two methods, since "binomial" leads
-      to too small intervals in the high FNR range, while "bootstrap" is too confident
-      in the low FNR range. This is the recommended method.
+    and then compute the other metric at those thresholds. The confidence band is
+    computed using the union of confidence rectangles for both FNR and FPR.
 
     Args:
         scores: The Scores object whose ROC curve we compute.
         fpr: FPR values. If provided, will be set on x-axis
         fnr: FNR values. If provided, will be set on y-axis
-        method: Method for calculating confidence intervals. One of "pessimist",
-            "bootstrap" or "binomial".
         alpha: Significance level. In range (0, 1).
+        nb_samples: Number of samples to bootstrap
+        bootstrap_method: Method to compute the CI from the bootstrap samples. See the
+            documentation of Scores.bootstrap_ci for details.
+        sampling_method: Sampling method to create bootstrap sample. See the
+            documentation of Scores.bootstrap_ci for details.
 
     Returns:
         (fpr, fnr, lower, upper) consisting of FPR and FNR values and the lower and
@@ -55,66 +51,95 @@ def roc_with_ci(
         raise ValueError("Cannot provide both FPR and FNR.")
     if fpr is None and fnr is None:
         raise ValueError("Must provide at least one of FPR and FNR.")
-    if method not in {"bootstrap", "binomial", "pessimist"}:
-        raise ValueError(f"Unknown method {method} for computing CI.")
+
+    swap_axes = fpr is not None  # If True, we plot fpr on x-axis
+    if swap_axes:
+        scores = scores.swap()
+        fnr = fpr
+    # From here on we assume that we plot fnr on x-axis.
+
+    # Use the given points to calculate initial thresholds
+    fnr = np.asarray(fnr)
+    threshold = scores.threshold_at_fnr(fnr)
+
+    # We need to augment threshold to cover the full fnr and fpr ranges
+    fpr_max = scores.fpr(threshold[0])
+    fpr_high = np.linspace(1.0, fpr_max, num=20, endpoint=False)
+    threshold_before = scores.threshold_at_fpr(fpr_high)
+
+    fnr_max = scores.fnr(threshold[-1])
+    fnr_high = np.linspace(1.0, fnr_max, num=20, endpoint=False)[::-1]
+    threshold_after = scores.threshold_at_fnr(fnr_high)
+
+    # Final set of thresholds
+    threshold_all = np.concatenate([threshold_before, threshold, threshold_after])
+    fpr_all = scores.fpr(threshold_all)
+    fnr_all = scores.fnr(threshold_all)
 
     # Calculate bootstrap CI
-    def _fpr_at_fnr(_scores: Scores, _fnr: np.ndarray) -> np.ndarray:
+    def _fpr_at_fnr(_scores: Scores, _fnr: np.ndarray = fnr_all) -> np.ndarray:
         _threshold = _scores.threshold_at_fnr(_fnr)
         _fpr = _scores.fpr(_threshold)
         return _fpr
 
-    def _fnr_at_fpr(_scores: Scores, _fpr: np.ndarray) -> np.ndarray:
+    def _fnr_at_fpr(_scores: Scores, _fpr: np.ndarray = fpr_all) -> np.ndarray:
         _threshold = _scores.threshold_at_fpr(_fpr)
         _fnr = _scores.fnr(_threshold)
         return _fnr
 
-    if fnr is not None:
-        fnr = np.asarray(fnr)
-        metric = partial(_fpr_at_fnr, _fnr=fnr)
-    else:
-        fpr = np.asarray(fpr)
-        metric = partial(_fnr_at_fpr, _fpr=fpr)
+    # Compute CIs in each direction
+    fnr_ci = scores.bootstrap_ci(
+        metric=_fnr_at_fpr,
+        alpha=alpha,
+        nb_samples=nb_samples,
+        bootstrap_method=bootstrap_method,
+        sampling_method=sampling_method,
+    )
+    fpr_ci = scores.bootstrap_ci(
+        metric=_fpr_at_fnr,
+        alpha=alpha,
+        nb_samples=nb_samples,
+        bootstrap_method=bootstrap_method,
+        sampling_method=sampling_method,
+    )
+    lower, upper = _aggregate_rectangles(fnr, fnr_ci, fpr_ci)
 
-    if method in {"bootstrap", "pessimist"}:
-        bootstrap_ci = scores.bootstrap_ci(
-            metric=metric,
-            alpha=alpha,
-            nb_samples=1000,
-            method="replacement",
-        )
-    else:
-        bootstrap_ci = None
-
-    # Calculate binomial CI
-    if method in {"binomial", "pessimist"}:
-        if fnr is not None:
-            threshold = scores.threshold_at_fnr(fnr)
-            cm = scores.cm(threshold)
-            binomial_ci = cm.fpr_ci(alpha=alpha)
-        else:
-            threshold = scores.threshold_at_fpr(fpr)
-            cm = scores.cm(threshold)
-            binomial_ci = cm.fnr_ci(alpha=alpha)
-    else:
-        binomial_ci = None
-
-    # Based on method select right one
-    if method == "bootstrap":
-        lower = bootstrap_ci[:, 0]
-        upper = bootstrap_ci[:, 1]
-    elif method == "binomial":
-        lower = binomial_ci[:, 0]
-        upper = binomial_ci[:, 1]
-    else:
-        # Take the worst ones
-        lower = np.minimum(bootstrap_ci[:, 0], binomial_ci[:, 0])
-        upper = np.maximum(bootstrap_ci[:, 1], binomial_ci[:, 1])
-
-    # Calculate the y-axis values
-    if fnr is not None:
-        fpr = _fpr_at_fnr(scores, fnr)
-    else:
-        fnr = _fnr_at_fpr(scores, fpr)
+    fpr = scores.fpr(threshold)
+    if swap_axes:
+        fnr, fpr = fpr, fnr
 
     return fpr, fnr, lower, upper
+
+
+def _aggregate_rectangles(
+    x: np.ndarray, dxp: np.ndarray, dyp: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Function aggregates rectangles into one continous band and returns
+    the lower and upper limits of the band at the points given by x.
+
+    Args:
+        x: Array of shape (N,) of points where to evaluate the band
+        dxp: Array of shape (M, 2) with x-limits of rectangles
+        dyp: Array of shape (M, 2) with y-limits of rectangles
+
+    Returns:
+        lower, upper: Arrays of shape (N,) where
+            * lower[i] is the minimum of dyp[j, 0] for which x[i] lies in the interval
+              defined by dxp[j]
+            * upper[i] is the maximum of dyp[j, 1] with the same condition
+
+            The values lower[i] and upper[i] are undefined if no rectangle covers x[i].
+    """
+    x = np.asarray(x)
+    dxp = np.asarray(dxp)
+    dyp = np.asarray(dyp)
+
+    lower = np.empty_like(x)
+    upper = np.empty_like(x)
+    for j in range(len(x)):
+        inside = (dxp[:, 0] <= x[j]) & (x[j] <= dxp[:, 1])
+        if np.sum(inside) > 0:
+            lower[j] = np.min(dyp[inside, 0])
+            upper[j] = np.max(dyp[inside, 1])
+    return lower, upper

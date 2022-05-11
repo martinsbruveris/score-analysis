@@ -5,6 +5,3 @@ Confusion Matrix
 
 .. autoclass:: ConfusionMatrix
     :members:
-
-.. autoclass:: BinaryConfusionMatrix
-    :members:

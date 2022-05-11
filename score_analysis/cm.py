@@ -3,6 +3,7 @@ ConfusionMatrix module.
 """
 from __future__ import annotations
 
+from functools import wraps
 from typing import Union
 
 import numpy as np
@@ -29,6 +30,7 @@ def cm_class_metric(metric=None, axis: int = -1):
     """
 
     def decorator(_metric):
+        @wraps(_metric)
         def wrapper(self: ConfusionMatrix, *args, as_dict: bool = False, **kwargs):
             if self.binary and as_dict:
                 raise ValueError("Cannot return as dict with binary matrices.")

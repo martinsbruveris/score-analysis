@@ -246,15 +246,43 @@ def test_bootstrap_metric(metric, nb_samples):
     assert samples.shape == (nb_samples, 2)
 
 
-def test_bootstrap_ci():
+def test_bootstrap_ci_identity():
     scores = Scores(pos=[1, 2, 3, 4], neg=[1, 2, 3])
     nb_samples = 3
     # Testing with identity sampling, in which case CI should collapse
-    ci = scores.bootstrap_ci(metric="eer", nb_samples=nb_samples, method=lambda x: x)
+    ci = scores.bootstrap_ci(
+        metric="eer", nb_samples=nb_samples, sampling_method=lambda x: x
+    )
     eer = scores.eer()
     for j in range(nb_samples):
         np.testing.assert_equal(ci[..., 0], eer)
         np.testing.assert_equal(ci[..., 1], eer)
+
+    # Test invalid bootstrap method
+    with pytest.raises(ValueError):
+        scores.bootstrap_ci(metric="eer", bootstrap_method="no_such_method")
+
+
+@pytest.mark.parametrize("bootstrap_method", ["quantile", "bc", "bca"])
+def test_bootstrap_ci_gaussian(bootstrap_method):
+    rng = np.random.default_rng(seed=42)
+    nb_inside = 0
+    for j in range(100):
+        scores = Scores(pos=rng.normal(size=100), neg=[])
+        ci = scores.bootstrap_ci(
+            metric=lambda s: np.mean(s.pos),
+            bootstrap_method=bootstrap_method,
+            # We use a custom sampling method to make the test deterministic by fixing
+            # the random number generator
+            sampling_method=lambda s: Scores(
+                pos=rng.choice(s.pos, size=s.pos.size, replace=True), neg=[]
+            ),
+            nb_samples=200,
+        )
+        nb_inside += ci[0] < 0 < ci[1]
+    # If the test starts failing, we should check if it is due to flakiness of the RNG.
+    # There is a balance between accuracy and how long the tests take to run.
+    assert 92 < nb_inside < 98
 
 
 def test_pointwise_cm():

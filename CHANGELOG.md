@@ -2,6 +2,11 @@
 
 ## Unpublished
 
+- Improved ROC curve CI calculation.
+- Added parameter `bootstrap_method` in `Scores.bootstrap_ci` allowing calculation
+  of bootstrapped CIs using the percentile, bias-corrected and accelerated methods.
+- Renamed parameter in `Scores.bootsrap_ci` from `method` to `sampling_method`.
+- Added `pointwise_cm` method to compute sample-wise membership for confusion matrices.
 - Removed `BinaryConfusionMatrix` and absorbed the functionality in `ConfusionMatrix` 
   using the parameter `binary=True`.
 - Reordered parameters in `Scores.from_labels` for consistency.

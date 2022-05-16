@@ -172,6 +172,38 @@ def test_threshold_setting(scores, ratio, score_class, equal_class):
     np.testing.assert_allclose(threshold, expected, atol=1e-10)
 
 
+def test_threshold_setting_easy_pos():
+    """Testing threshold setting in the presence of easy positive samples."""
+    scores = Scores(pos=range(100), neg=[])
+    scores_easy = Scores(pos=range(40), neg=[], nb_easy_pos=60)
+
+    tpr = [0.7, 0.8, 0.9, 0.912]
+    np.testing.assert_allclose(
+        scores.threshold_at_tpr(tpr), scores_easy.threshold_at_tpr(tpr)
+    )
+
+    fnr = [0.02, 0.045, 0.1, 0.3]
+    np.testing.assert_allclose(
+        scores.threshold_at_fnr(fnr), scores_easy.threshold_at_fnr(fnr)
+    )
+
+
+def test_threshold_setting_easy_neg():
+    """Testing threshold setting in the presence of easy negative samples."""
+    scores = Scores(pos=[], neg=range(100), score_class="neg")
+    scores_easy = Scores(pos=[], neg=range(60), nb_easy_neg=40, score_class="neg")
+
+    tnr = [0.7, 0.8, 0.9, 0.912]
+    np.testing.assert_allclose(
+        scores.threshold_at_tnr(tnr), scores_easy.threshold_at_tnr(tnr)
+    )
+
+    fpr = [0.02, 0.045, 0.1, 0.3]
+    np.testing.assert_allclose(
+        scores.threshold_at_fpr(fpr), scores_easy.threshold_at_fpr(fpr)
+    )
+
+
 @pytest.mark.parametrize(
     "pos, neg, score_class, expected_threshold, expected_eer",
     [
@@ -189,6 +221,19 @@ def test_eer(pos, neg, score_class, expected_threshold, expected_eer):
     threshold, eer = scores.eer()
     np.testing.assert_allclose(threshold, expected_threshold)
     np.testing.assert_allclose(eer, expected_eer)
+
+
+def test_easy_edgecase_eer():
+    """Tests case where due to the presence of easy samples we cannot compute EER."""
+    scores = Scores(pos=[0, 1], neg=[2, 3], nb_easy_pos=1)
+    threshold, eer = scores.eer()
+    np.testing.assert_allclose(threshold, 2.0)
+    np.testing.assert_allclose(eer, 2.0 / 3.0)
+
+    scores = Scores(pos=[0, 1], neg=[2, 3], nb_easy_neg=1)
+    threshold, eer = scores.eer()
+    np.testing.assert_allclose(threshold, 1.0)
+    np.testing.assert_allclose(eer, 2.0 / 3.0)
 
 
 def test_find_root_invalid_input():

@@ -1,5 +1,10 @@
 # Change Log
 
+## v0.1.1 - 2022-05-16
+
+- Added support for virtual datasets, i.e., `nb_easy_pos`, `nb_easy_neg` parameters
+  in `Scores`.
+
 ## v0.1.0 - 2022-05-11
 
 - Improved ROC curve CI calculation.

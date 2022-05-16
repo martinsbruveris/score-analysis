@@ -24,6 +24,8 @@ class Scores:
         pos,
         neg,
         *,
+        nb_easy_pos: int = 0,
+        nb_easy_neg: int = 0,
         score_class: Union[BinaryLabel, str] = "pos",
         equal_class: Union[BinaryLabel, str] = "pos",
     ):
@@ -31,6 +33,12 @@ class Scores:
         Args:
             pos: Scores for positive samples
             neg: Scores for negative samples
+            nb_easy_pos: Number of positive samples that we assume are always correctly
+                classified when computing metrics. These parameters when evaluating
+                a highly accurate classifier on only the hardest samples to speed up
+                evaluation.
+            nb_easy_neg: Number of negative samples that we assume are always correctly
+                classified.
             score_class: Do scores indicate membership of the positive or the negative
                 class?
             equal_class: Do samples with score equal to the threshold get assigned to
@@ -38,11 +46,37 @@ class Scores:
         """
         self.pos = np.asarray(pos)
         self.neg = np.asarray(neg)
+        self.nb_easy_pos = nb_easy_pos
+        self.nb_easy_neg = nb_easy_neg
         self.score_class = BinaryLabel(score_class)
         self.equal_class = BinaryLabel(equal_class)
 
         self.pos = np.sort(self.pos)
         self.neg = np.sort(self.neg)
+
+    @property
+    def hard_pos_ratio(self):
+        if self.nb_easy_pos > 0:
+            return len(self.pos) / (len(self.pos) + self.nb_easy_pos)
+        else:
+            # The default state is that all samples are hard
+            return 1.0
+
+    @property
+    def hard_neg_ratio(self):
+        if self.nb_easy_neg > 0:
+            return len(self.neg) / (len(self.neg) + self.nb_easy_neg)
+        else:
+            # The default state is that all samples are hard
+            return 1.0
+
+    @property
+    def easy_pos_ratio(self):
+        return 1.0 - self.hard_pos_ratio
+
+    @property
+    def easy_neg_ratio(self):
+        return 1.0 - self.hard_neg_ratio
 
     @staticmethod
     def from_labels(
@@ -50,6 +84,8 @@ class Scores:
         scores,
         *,
         pos_label: Any = 1,
+        nb_easy_pos: int = 0,
+        nb_easy_neg: int = 0,
         score_class: Union[BinaryLabel, str] = "pos",
         equal_class: Union[BinaryLabel, str] = "pos",
     ) -> Scores:
@@ -59,6 +95,12 @@ class Scores:
             scores: Array with sample scores
             pos_label: The label of the positive class. All other labels are treated as
                 negative labels.
+            nb_easy_pos: Number of positive samples that we assume are always correctly
+                classified when computing metrics. These parameters when evaluating
+                a highly accurate classifier on only the hardest samples to speed up
+                evaluation.
+            nb_easy_neg: Number of negative samples that we assume are always correctly
+                classified.
             score_class: Do scores indicate membership of the positive or the negative
                 class?
             equal_class: Do samples with score equal to the threshold get assigned to
@@ -71,7 +113,14 @@ class Scores:
         scores = np.asarray(scores)
         pos = scores[labels == pos_label]
         neg = scores[labels != pos_label]
-        return Scores(pos, neg, score_class=score_class, equal_class=equal_class)
+        return Scores(
+            pos=pos,
+            neg=neg,
+            nb_easy_pos=nb_easy_pos,
+            nb_easy_neg=nb_easy_neg,
+            score_class=score_class,
+            equal_class=equal_class,
+        )
 
     def __eq__(self, other: Scores) -> bool:
         """
@@ -87,6 +136,8 @@ class Scores:
         equal = (
             np.array_equal(self.pos, other.pos)
             and np.array_equal(self.neg, other.neg)
+            and self.nb_easy_pos == other.nb_easy_pos
+            and self.nb_easy_neg == other.nb_easy_neg
             and self.score_class == other.score_class
             and self.equal_class == other.equal_class
         )
@@ -103,6 +154,8 @@ class Scores:
         return Scores(
             pos=self.neg,
             neg=self.pos,
+            nb_easy_pos=self.nb_easy_neg,
+            nb_easy_neg=self.nb_easy_pos,
             score_class="neg" if self.score_class == BinaryLabel.pos else "pos",
             equal_class="neg" if self.equal_class == BinaryLabel.pos else "pos",
         )
@@ -137,6 +190,10 @@ class Scores:
             tp, fn = pos_below, pos_above
             fp, tn = neg_below, neg_above
 
+        # Account for easy samples
+        tp += self.nb_easy_pos
+        tn += self.nb_easy_neg
+
         matrix = np.empty((*threshold.shape, 2, 2), dtype=int)
         matrix[..., 0, 0] = tp
         matrix[..., 0, 1] = fn
@@ -167,24 +224,37 @@ class Scores:
         """Set threshold at True Positive Rate."""
         if len(self.pos) == 0:
             raise ValueError("Cannot set threshold at TPR with no positive values.")
+        # Example: We want threshold at 70% TPR. If easy_pos_ratio=60%, then we want
+        # the threshold at 25% TPR on the remaining 40% hard positives, since
+        # 70% - 60% = 10% is 25% of the remaining 40%
+        tpr = np.maximum(np.asarray(tpr) - self.easy_pos_ratio, 0.0)
+        tpr = np.minimum(tpr / self.hard_pos_ratio, 1.0)
         return self._threshold_at_ratio(self.pos, tpr, False, BinaryLabel.pos)
 
     def threshold_at_fnr(self, fnr):
         """Set threshold at False Negative Rate."""
         if len(self.pos) == 0:
             raise ValueError("Cannot set threshold at FNR with no positive values.")
+        # Example: We want the threshold at 5% FNR. If hard_pos_ratio=10%, then we want
+        # the threshold at 5% / 0.1 = 50% of the available 10% of hard positives.
+        fnr = np.minimum(np.asarray(fnr) / self.hard_pos_ratio, 1.0)
         return self._threshold_at_ratio(self.pos, fnr, True, BinaryLabel.pos)
 
     def threshold_at_tnr(self, tnr):
         """Set threshold at True Negative Rate."""
         if len(self.neg) == 0:
             raise ValueError("Cannot set threshold at TNR with no negative values.")
+        # See explanation in threshold_at_tpr()
+        tnr = np.maximum(np.asarray(tnr) - self.easy_neg_ratio, 0.0)
+        tnr = np.minimum(tnr / self.hard_neg_ratio, 1.0)
         return self._threshold_at_ratio(self.neg, tnr, True, BinaryLabel.neg)
 
     def threshold_at_fpr(self, fpr):
         """Set threshold at False Positive Rate."""
         if len(self.neg) == 0:
             raise ValueError("Cannot set threshold at FPR with no negative values.")
+        # See explanation at threshold_at_fnr()
+        fpr = np.minimum(np.asarray(fpr) / self.hard_neg_ratio, 1.0)
         return self._threshold_at_ratio(self.neg, fpr, False, BinaryLabel.neg)
 
     def _threshold_at_ratio(
@@ -275,12 +345,10 @@ class Scores:
             and the EER value.
         """
         # We treat the case of perfect separation separately
-        if self.pos[0] >= self.neg[-1]:
-            eer = 0.0 if self.score_class == BinaryLabel.pos else 1.0
-            return (self.pos[0] + self.neg[-1]) / 2, eer
-        if self.pos[-1] <= self.neg[0]:
-            eer = 1.0 if self.score_class == BinaryLabel.pos else 0.0
-            return (self.pos[-1] + self.neg[0]) / 2, eer
+        if self.pos[0] >= self.neg[-1] and self.score_class == BinaryLabel.pos:
+            return (self.pos[0] + self.neg[-1]) / 2, 0.0
+        if self.pos[-1] <= self.neg[0] and self.score_class == BinaryLabel.neg:
+            return (self.pos[-1] + self.neg[0]) / 2, 0.0
 
         sign = -(self.threshold_at_fpr(0.0) - self.threshold_at_fnr(0.0))
 
@@ -291,10 +359,31 @@ class Scores:
             y = sign * y  # Normalize function, such that f(0) <= 0.
             return y
 
+        # EER cannot be larger than this: FPR cannot be larger than hard_pos_ratio,
+        # since all other positives are easy and thus always correctly classified;
+        # similarly, FNR cannot be larger than hard_neg_ratio
+        max_eer = min(self.hard_pos_ratio, self.hard_neg_ratio)
+
+        # This is the case of a very bad classifier, i.e., without easy samples this
+        # happens only if all samples are incorrectly classified, i.e., EER=1.0. With
+        # easy samples, we have to interpolate at the edge of where hard samples stop.
+        if f(max_eer) < 0:
+            if np.isclose(self.hard_pos_ratio, self.hard_neg_ratio):
+                threshold = (
+                    self.threshold_at_fpr(max_eer) + self.threshold_at_fnr(max_eer)
+                ) / 2
+                return threshold, max_eer
+            elif self.hard_pos_ratio < self.hard_neg_ratio:
+                threshold = self.threshold_at_fpr(self.hard_pos_ratio)
+                return threshold, self.hard_pos_ratio
+            else:
+                threshold = self.threshold_at_fnr(self.hard_neg_ratio)
+                return threshold, self.hard_neg_ratio
+
         # The function f is increasing, but not strictly, i.e., it can have flat spots,
         # so we find the left-most root, the right-most root and then take the average.
-        left = self._find_root(f, 0.0, 1.0, find_first=True)
-        right = self._find_root(f, 0.0, 1.0, find_first=False)
+        left = self._find_root(f, 0.0, max_eer, find_first=True)
+        right = self._find_root(f, 0.0, max_eer, find_first=False)
 
         eer = (left + right) / 2
         threshold = self.threshold_at_fpr(eer)

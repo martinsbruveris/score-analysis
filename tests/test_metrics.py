@@ -133,3 +133,20 @@ def test_metric_ci(matrix, expected, func, alpha):
     expected = np.asarray(expected)
     result = func(matrix, alpha)
     np.testing.assert_allclose(result, expected)
+
+
+@pytest.mark.parametrize(
+    "original, alias, args",
+    [
+        [metrics.tpr, metrics.tar, [np.array([[1, 0], [3, 2]])]],
+        [metrics.fnr, metrics.frr, [np.array([[1, 0], [3, 2]])]],
+        [metrics.tnr, metrics.trr, [np.array([[1, 0], [3, 2]])]],
+        [metrics.fpr, metrics.far, [np.array([[1, 0], [3, 2]])]],
+        [metrics.tpr_ci, metrics.tar_ci, [np.array([[1, 0], [3, 2]]), 0.1]],
+        [metrics.fnr_ci, metrics.frr_ci, [np.array([[1, 0], [3, 2]]), 0.1]],
+        [metrics.tnr_ci, metrics.trr_ci, [np.array([[1, 0], [3, 2]]), 0.1]],
+        [metrics.fpr_ci, metrics.far_ci, [np.array([[1, 0], [3, 2]]), 0.1]],
+    ],
+)
+def test_aliases(original, alias, args):
+    np.testing.assert_equal(original(*args), alias(*args))

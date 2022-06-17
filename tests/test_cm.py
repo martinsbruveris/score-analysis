@@ -311,3 +311,24 @@ def test_binary_tpr_etc():
 def test_binary_tpr_ci_etc(matrix, expected, metric):
     cm = ConfusionMatrix(matrix=matrix, binary=True)
     np.testing.assert_allclose(metric(cm, alpha=0.05), expected)
+
+
+@pytest.mark.parametrize(
+    "original, alias, kwargs",
+    [
+        [ConfusionMatrix.tpr, ConfusionMatrix.tar, {}],
+        [ConfusionMatrix.fnr, ConfusionMatrix.frr, {}],
+        [ConfusionMatrix.tnr, ConfusionMatrix.trr, {}],
+        [ConfusionMatrix.fpr, ConfusionMatrix.far, {}],
+        [ConfusionMatrix.tpr_ci, ConfusionMatrix.tar_ci, {"alpha": 0.1}],
+        [ConfusionMatrix.fnr_ci, ConfusionMatrix.frr_ci, {"alpha": 0.1}],
+        [ConfusionMatrix.tnr_ci, ConfusionMatrix.trr_ci, {"alpha": 0.1}],
+        [ConfusionMatrix.fpr_ci, ConfusionMatrix.far_ci, {"alpha": 0.1}],
+    ],
+)
+def test_aliases(original, alias, kwargs):
+    cm = ConfusionMatrix(matrix=[[1, 3], [1, 10]], binary=True)
+    np.testing.assert_equal(original(cm, **kwargs), alias(cm, **kwargs))
+
+    cm = ConfusionMatrix(matrix=[[1, 3], [1, 10]], binary=False)
+    np.testing.assert_equal(original(cm, **kwargs), alias(cm, **kwargs))

@@ -386,3 +386,21 @@ def test_pointwise_cm_shape():
         labels=np.zeros((3, 4)), scores=np.zeros((3, 4)), threshold=np.zeros((5, 1))
     )
     assert cm.shape == (3, 4, 5, 1, 2, 2)
+
+
+@pytest.mark.parametrize(
+    "original, alias, args",
+    [
+        [Scores.tpr, Scores.tar, (2,)],
+        [Scores.fnr, Scores.frr, (2,)],
+        [Scores.tnr, Scores.trr, (2,)],
+        [Scores.fpr, Scores.far, (2,)],
+        [Scores.threshold_at_tpr, Scores.threshold_at_tar, (0.3,)],
+        [Scores.threshold_at_fnr, Scores.threshold_at_frr, (0.3,)],
+        [Scores.threshold_at_tnr, Scores.threshold_at_trr, (0.3,)],
+        [Scores.threshold_at_fpr, Scores.threshold_at_far, (0.3,)],
+    ],
+)
+def test_aliases(original, alias, args):
+    scores = Scores(pos=[1, 2, 3, 4, 5, 6], neg=[0.2, 1.2, 1.3, 3, 4, 4, 4])
+    np.testing.assert_equal(original(scores, *args), alias(scores, *args))

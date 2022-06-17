@@ -366,6 +366,35 @@ class ConfusionMatrix:
         """False Negative Rate"""
         return metrics.fnr(self.matrix)
 
+    # Aliases for within Onfido use.
+    @cm_class_metric
+    def tar(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
+        """
+        True Acceptance Rate. Alias for :func:`~ConfusionMatrix.tpr`.
+        """
+        return metrics.tpr(self.matrix)
+
+    @cm_class_metric
+    def frr(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
+        """
+        False Rejection Rate. Alias for :func:`~ConfusionMatrix.fnr`.
+        """
+        return metrics.fnr(self.matrix)
+
+    @cm_class_metric
+    def trr(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
+        """
+        True Rejection Rate. Alias for :func:`~ConfusionMatrix.tnr`.
+        """
+        return metrics.tnr(self.matrix)
+
+    @cm_class_metric
+    def far(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
+        """
+        False Acceptance Rate. Alias for :func:`~ConfusionMatrix.fpr`.
+        """
+        return metrics.fpr(self.matrix)
+
     @cm_class_metric(axis=-2)
     def tpr_ci(
         self, alpha: float = 0.05, *, as_dict: bool = False
@@ -393,6 +422,47 @@ class ConfusionMatrix:
     ) -> Union[dict, float, np.ndarray]:
         """False Negative Rate confidence interval"""
         return metrics.fnr_ci(self.matrix, alpha=alpha)
+
+    # Aliases for within Onfido use.
+    @cm_class_metric(axis=-2)
+    def tar_ci(
+        self, alpha: float = 0.05, *, as_dict: bool = False
+    ) -> Union[dict, float, np.ndarray]:
+        """
+        True Acceptance Rate confidence interval. Alias for
+        :func:`~ConfusionMatrix.tpr_ci`.
+        """
+        return metrics.tpr_ci(self.matrix, alpha=alpha)
+
+    @cm_class_metric(axis=-2)
+    def frr_ci(
+        self, alpha: float = 0.05, *, as_dict: bool = False
+    ) -> Union[dict, float, np.ndarray]:
+        """
+        False Rejection Rate confidence interval. Alias for
+        :func:`~ConfusionMatrix.fnr_ci`.
+        """
+        return metrics.fnr_ci(self.matrix, alpha=alpha)
+
+    @cm_class_metric(axis=-2)
+    def trr_ci(
+        self, alpha: float = 0.05, *, as_dict: bool = False
+    ) -> Union[dict, float, np.ndarray]:
+        """
+        True Rejection Rate confidence interval. Alias for
+        :func:`~ConfusionMatrix.tnr_ci`.
+        """
+        return metrics.tnr_ci(self.matrix, alpha=alpha)
+
+    @cm_class_metric(axis=-2)
+    def far_ci(
+        self, alpha: float = 0.05, *, as_dict: bool = False
+    ) -> Union[dict, float, np.ndarray]:
+        """
+        False Acceptance Rate confidence interval. Alias for
+        :func:`~ConfusionMatrix.fpr_ci`.
+        """
+        return metrics.fpr_ci(self.matrix, alpha=alpha)
 
     @cm_class_metric
     def ppv(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:

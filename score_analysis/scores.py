@@ -220,6 +220,39 @@ class Scores:
         """False Positive Rate at threshold(s)."""
         return self.cm(threshold).fpr()
 
+    # Aliases for within Onfido use.
+    def tar(self, threshold):
+        """
+        True Acceptance Rate at threshold(s).
+
+        Alias for :func:`~Scores.tpr`.
+        """
+        return self.tpr(threshold)
+
+    def frr(self, threshold):
+        """
+        False Rejection Rate at threshold(s).
+
+        Alias for :func:`~Scores.fnr`.
+        """
+        return self.fnr(threshold)
+
+    def trr(self, threshold):
+        """
+        True Rejection Rate at threshold(s).
+
+        Alias for :func:`~Scores.tnr`.
+        """
+        return self.tnr(threshold)
+
+    def far(self, threshold):
+        """
+        False Acceptance Rate at threshold(s).
+
+        Alias for :func:`~Scores.fpr`.
+        """
+        return self.fpr(threshold)
+
     def threshold_at_tpr(self, tpr):
         """Set threshold at True Positive Rate."""
         if len(self.pos) == 0:
@@ -336,9 +369,43 @@ class Scores:
 
         return threshold
 
+    # Aliases for within Onfido use.
+    def threshold_at_tar(self, tar):
+        """
+        Set threshold at True Acceptance Rate
+
+        Alias for :func:`~Scores.threshold_at_tpr`.
+        """
+        return self.threshold_at_tpr(tpr=tar)
+
+    def threshold_at_frr(self, frr):
+        """
+        Set threshold at False Rejection Rate
+
+        Alias for :func:`~Scores.threshold_at_fnr`.
+        """
+        return self.threshold_at_fnr(fnr=frr)
+
+    def threshold_at_trr(self, trr):
+        """
+        Set threshold at True Rejection Rate
+
+        Alias for :func:`~Scores.threshold_at_tnr`.
+        """
+        return self.threshold_at_tnr(tnr=trr)
+
+    def threshold_at_far(self, far):
+        """
+        Set threshold at False Acceptance Rate
+
+        Alias for :func:`~Scores.threshold_at_fpr`.
+        """
+        return self.threshold_at_fpr(fpr=far)
+
     def eer(self) -> Tuple[float, float]:
         """
-        Calculates Equal Error Rate, i.e., where FPR = FNR.
+        Calculates Equal Error Rate, i.e., where FPR = FNR (or, equivalently, where
+        FAR = FRR).
 
         Returns:
             Tuple (threshold, eer) consisting of the threshold at which EER is achieved

@@ -259,6 +259,35 @@ def fnr(matrix: np.ndarray) -> Union[np.ndarray, float]:
     return res
 
 
+# Aliases for within Onfido use.
+def tar(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    True Acceptance Rate. Alias for :func:`tpr`.
+    """
+    return tpr(matrix)
+
+
+def frr(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    False Rejection Rate. Alias for :func:`fnr`.
+    """
+    return fnr(matrix)
+
+
+def trr(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    True Rejection Rate. Alias for :func:`tnr`.
+    """
+    return tnr(matrix)
+
+
+def far(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    False Acceptance Rate. Alias for :func:`fpr`.
+    """
+    return fpr(matrix)
+
+
 def tpr_ci(matrix: np.ndarray, alpha: float = 0.05) -> np.ndarray:
     """
     Confidence inferval for the True Positive Rate for binary confusion matrices.
@@ -313,6 +342,35 @@ def fnr_ci(matrix: np.ndarray, alpha: float = 0.05) -> np.ndarray:
         Array of shape (..., 2). Lower and upper limits of CI with coverage 1-alpha.
     """
     return binomial_ci(count=fn(matrix), nobs=p(matrix), alpha=alpha)
+
+
+# Aliases for within Onfido use.
+def tar_ci(matrix: np.ndarray, alpha: float = 0.05) -> np.ndarray:
+    """
+    Confidence interval for the True Acceptance Rate. Alias for :func:`tpr_ci`.
+    """
+    return tpr_ci(matrix, alpha)
+
+
+def frr_ci(matrix: np.ndarray, alpha: float = 0.05) -> np.ndarray:
+    """
+    Confidence interval for the False Rejection Rate. Alias for :func:`fnr_ci`.
+    """
+    return fnr_ci(matrix, alpha)
+
+
+def trr_ci(matrix: np.ndarray, alpha: float = 0.05) -> np.ndarray:
+    """
+    Confidence interval for the True Rejection Rate. Alias for :func:`tnr_ci`.
+    """
+    return tnr_ci(matrix, alpha)
+
+
+def far_ci(matrix: np.ndarray, alpha: float = 0.05) -> np.ndarray:
+    """
+    Confidence interval for the False Acceptance Rate. Alias for :func:`fpr_ci`.
+    """
+    return fpr_ci(matrix, alpha)
 
 
 def ppv(matrix: np.ndarray) -> Union[np.ndarray, float]:

@@ -1,5 +1,9 @@
 # Change Log
 
+## Unpublished
+
+- Add FAR, FRR, etc. aliases.
+
 ## v0.1.1 - 2022-05-16
 
 - Added support for virtual datasets, i.e., `nb_easy_pos`, `nb_easy_neg` parameters

@@ -1,7 +1,9 @@
 # Change Log
 
-## Unpublished
+## v0.1.2 - 2022-07-04
 
+- Fixing bug with bootstrapping CIs when using virtual datasets.
+- Add specific doc fraud module.
 - Add FAR, FRR, etc. aliases.
 
 ## v0.1.1 - 2022-05-16

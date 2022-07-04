@@ -509,32 +509,71 @@ class Scores:
             Scores object with the sampled scores.
         """
         if method == "replacement":
-            # Sampling a sample of the same size with replacement
-            pos = np.random.choice(self.pos, size=self.pos.size, replace=True)
-            neg = np.random.choice(self.neg, size=self.neg.size, replace=True)
-
             # This code also takes into account uncertainty about the pos : neg
             # ratio in the bootstrapped sample. Not used at the moment.
             # n = self.pos.size + self.neg.size
             # p = self.pos.size / n
             # nb_pos = np.random.binomial(n, p)
-            # pos = np.random.choice(self.pos, size=nb_pos, replace=True)
-            # neg = np.random.choice(self.neg, size=n - nb_pos, replace=True)
+            # nb_neg = n - nb_pos
+
+            # The number of positives and negatives in the sample is the same
+            nb_pos = self.pos.size + self.nb_easy_pos
+            nb_neg = self.neg.size + self.nb_easy_neg
+
+            # We need to find out how many easy samples there will be in the sample
+            nb_easy_pos = (
+                np.random.binomial(nb_pos, self.nb_easy_pos / nb_pos)
+                if nb_pos > 0
+                else 0
+            )
+            nb_easy_neg = (
+                np.random.binomial(nb_neg, self.nb_easy_neg / nb_neg)
+                if nb_neg > 0
+                else 0
+            )
+            nb_hard_pos = nb_pos - nb_easy_pos
+            nb_hard_neg = nb_neg - nb_easy_neg
+
+            # Sampling hard samples with replacement
+            pos = (
+                np.random.choice(self.pos, size=nb_hard_pos, replace=True)
+                if self.pos.size > 0
+                else []
+            )
+            neg = (
+                np.random.choice(self.neg, size=nb_hard_neg, replace=True)
+                if self.neg.size > 0
+                else []
+            )
 
             scores = Scores(
-                pos, neg, score_class=self.score_class, equal_class=self.equal_class
+                pos=pos,
+                neg=neg,
+                nb_easy_pos=nb_easy_pos,
+                nb_easy_neg=nb_easy_neg,
+                score_class=self.score_class,
+                equal_class=self.equal_class,
             )
         elif method == "proportion":
             if ratio is None:
                 raise ValueError("For proportional sampling, ratio has to be defined.")
             # Sampling a sample defined by ratio, without replacement
-            pos_size = max(int(ratio * self.pos.size), 1)
-            pos = np.random.choice(self.pos, size=pos_size, replace=False)
-            neg_size = max(int(ratio * self.neg.size), 1)
-            neg = np.random.choice(self.neg, size=neg_size, replace=False)
+            nb_pos = max(int(ratio * self.pos.size), 1)
+            nb_neg = max(int(ratio * self.neg.size), 1)
+            pos = np.random.choice(self.pos, size=nb_pos, replace=False)
+            neg = np.random.choice(self.neg, size=nb_neg, replace=False)
+
+            # We also "sample" a proportional sample of easy sample
+            nb_easy_pos = int(ratio * self.nb_easy_pos)
+            nb_easy_neg = int(ratio * self.nb_easy_neg)
 
             scores = Scores(
-                pos, neg, score_class=self.score_class, equal_class=self.equal_class
+                pos=pos,
+                neg=neg,
+                nb_easy_pos=nb_easy_pos,
+                nb_easy_neg=nb_easy_neg,
+                score_class=self.score_class,
+                equal_class=self.equal_class,
             )
         elif isinstance(method, str):
             raise ValueError(f"Unsupported sampling method {method}.")

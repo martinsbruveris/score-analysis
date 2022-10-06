@@ -65,6 +65,18 @@ def test_basic_metrics(metric, expected):
         [[[0, 0], [0, 0]], np.nan, True, metrics.fpr],  # Nans
         [[[[0, 0], [1, 3]]], [0.25], False, metrics.fpr],  # Vectorized
         [[[[[0, 0], [0, 0]]]], [[np.nan]], False, metrics.fpr],  # Vectorized nans
+        # TOPR
+        [[[1, 3], [2, 6]], 0.25, True, metrics.topr],  # Regular computation
+        [[[2, 0], [3, 0]], 1.0, True, metrics.topr],  # Zeros in other row
+        [[[0, 0], [0, 0]], np.nan, True, metrics.topr],  # Nans
+        [[[[0, 5], [0, 4]]], [0.0], False, metrics.topr],  # Vectorized
+        [[[[[0, 0], [0, 0]]]], [[np.nan]], False, metrics.topr],  # Vectorized nans
+        # TONR
+        [[[2, 4], [1, 5]], 0.75, True, metrics.tonr],  # Regular computation
+        [[[0, 2], [0, 3]], 1.0, True, metrics.tonr],  # Zeros in other row
+        [[[0, 0], [0, 0]], np.nan, True, metrics.tonr],  # Nans
+        [[[[5, 0], [4, 0]]], [0.0], False, metrics.tonr],  # Vectorized
+        [[[[[0, 0], [0, 0]]]], [[np.nan]], False, metrics.tonr],  # Vectorized nans
         # PPV
         [[[3, 4], [1, 3]], 0.75, True, metrics.ppv],  # Regular computation
         [[[3, 0], [1, 0]], 0.75, True, metrics.ppv],  # Zeros in other column
@@ -142,6 +154,8 @@ def test_metric_ci(matrix, expected, func, alpha):
         [metrics.fnr, metrics.frr, [np.array([[1, 0], [3, 2]])]],
         [metrics.tnr, metrics.trr, [np.array([[1, 0], [3, 2]])]],
         [metrics.fpr, metrics.far, [np.array([[1, 0], [3, 2]])]],
+        [metrics.topr, metrics.acceptance_rate, [np.array([[1, 0], [3, 2]])]],
+        [metrics.tonr, metrics.rejection_rate, [np.array([[1, 0], [3, 2]])]],
         [metrics.tpr_ci, metrics.tar_ci, [np.array([[1, 0], [3, 2]]), 0.1]],
         [metrics.fnr_ci, metrics.frr_ci, [np.array([[1, 0], [3, 2]]), 0.1]],
         [metrics.tnr_ci, metrics.trr_ci, [np.array([[1, 0], [3, 2]]), 0.1]],

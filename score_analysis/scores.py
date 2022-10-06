@@ -78,6 +78,26 @@ class Scores:
     def easy_neg_ratio(self):
         return 1.0 - self.hard_neg_ratio
 
+    @property
+    def nb_easy_samples(self):
+        return self.nb_easy_pos + self.nb_easy_neg
+
+    @property
+    def nb_hard_samples(self):
+        return len(self.pos) + len(self.neg)
+
+    @property
+    def nb_all_samples(self):
+        return self.nb_easy_samples + self.nb_hard_samples
+
+    @property
+    def easy_ratio(self):
+        return self.nb_easy_samples / self.nb_all_samples
+
+    @property
+    def hard_ratio(self):
+        return 1.0 - self.easy_ratio
+
     @staticmethod
     def from_labels(
         labels,
@@ -220,6 +240,14 @@ class Scores:
         """False Positive Rate at threshold(s)."""
         return self.cm(threshold).fpr()
 
+    def topr(self, threshold):
+        """Test Outcome Positive Rate at threshold(s)."""
+        return self.cm(threshold).topr()
+
+    def tonr(self, threshold):
+        """Test Outcome Negative Rate at threshold(s)."""
+        return self.cm(threshold).tonr()
+
     # Aliases for within Onfido use.
     def tar(self, threshold):
         """
@@ -252,6 +280,22 @@ class Scores:
         Alias for :func:`~Scores.fpr`.
         """
         return self.fpr(threshold)
+
+    def acceptance_rate(self, threshold):
+        """
+        Acceptance Rate at threshold(s).
+
+        Alias for :func:`~Scores.topr`.
+        """
+        return self.topr(threshold)
+
+    def rejection_rate(self, threshold):
+        """
+        Rejection Rate at threshold(s).
+
+        Alias for :func:`~Scores.tonr`.
+        """
+        return self.tonr(threshold)
 
     def threshold_at_tpr(self, tpr):
         """Set threshold at True Positive Rate."""
@@ -289,6 +333,41 @@ class Scores:
         # See explanation at threshold_at_fnr()
         fpr = np.minimum(np.asarray(fpr) / self.hard_neg_ratio, 1.0)
         return self._threshold_at_ratio(self.neg, fpr, False, BinaryLabel.neg)
+
+    def threshold_at_topr(self, topr):
+        """
+        Set threshold at Test Outcome Positive Rate.
+
+        This is the proportion of samples where the test outcome is positive,
+        i.e. the test detects the condition.
+        """
+        concat_scores = np.sort(np.concatenate([self.neg, self.pos]))
+        if len(concat_scores) == 0:
+            raise ValueError("Cannot set threshold at TOPR without any values.")
+        # See explanation at threshold_at_tonr()
+        easy_pos_to_total_ratio = self.nb_easy_pos / self.nb_all_samples
+        topr = np.maximum(np.asarray(topr) - easy_pos_to_total_ratio, 0.0)
+        topr = np.minimum(topr / self.hard_ratio, 1.0)
+        return self._threshold_at_ratio(concat_scores, topr, False, BinaryLabel.pos)
+
+    def threshold_at_tonr(self, tonr):
+        """
+        Set threshold at Test Outcome Negative Rate.
+
+        This is the proportion of samples where the test outcome is negative,
+        i.e. the test does not detect the condition.
+        """
+        concat_scores = np.sort(np.concatenate([self.neg, self.pos]))
+        if len(concat_scores) == 0:
+            raise ValueError("Cannot set threshold at TONR without any values.")
+        # Example: Imagine we want a threshold at 85% TONR and 80% of our data are
+        # easy negatives and 10% of our data are easy positives. Then, we want the
+        # threshold at 50% TONR on the 10% of data for which we have scores, since
+        # 85% - 80% = 5% is 50% of the 10% data with scores (5% / 10%).
+        easy_neg_to_total_ratio = self.nb_easy_neg / self.nb_all_samples
+        tonr = np.maximum(np.asarray(tonr) - easy_neg_to_total_ratio, 0.0)
+        tonr = np.minimum(tonr / self.hard_ratio, 1.0)
+        return self._threshold_at_ratio(concat_scores, tonr, True, BinaryLabel.neg)
 
     def _threshold_at_ratio(
         self, scores, target_ratio, increasing: bool, ratio_class: BinaryLabel
@@ -401,6 +480,22 @@ class Scores:
         Alias for :func:`~Scores.threshold_at_fpr`.
         """
         return self.threshold_at_fpr(fpr=far)
+
+    def threshold_at_acceptance_rate(self, acceptance_rate):
+        """
+        Set threshold at Acceptance Rate
+
+        Alias for :func:`~Scores.threshold_at_topr`.
+        """
+        return self.threshold_at_topr(topr=acceptance_rate)
+
+    def threshold_at_rejection_rate(self, rejection_rate):
+        """
+        Set threshold at Rejection Rate
+
+        Alias for :func:`~Scores.threshold_at_tonr`.
+        """
+        return self.threshold_at_tonr(tonr=rejection_rate)
 
     def eer(self) -> Tuple[float, float]:
         """

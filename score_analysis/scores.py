@@ -92,7 +92,11 @@ class Scores:
 
     @property
     def easy_ratio(self):
-        return self.nb_easy_samples / self.nb_all_samples
+        if self.nb_easy_samples > 0:
+            return self.nb_easy_samples / self.nb_all_samples
+        else:
+            # The default state is that all samples are hard
+            return 0.0
 
     @property
     def hard_ratio(self):

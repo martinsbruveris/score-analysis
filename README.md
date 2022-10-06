@@ -161,12 +161,14 @@ Class metrics
 2. TNR (true negative rate) + confidence interval
 3. FPR (false positive rate) + confidence interval
 4. FNR (false negative rate) + confidence interval
-5. PPV (positive predictive value)
-6. NPV (negative predictive value)
-7. FDR (false discovery rate)
-8. FOR (false omission rate)
-9. Class accuracy
-10. Class error rate
+5. TOPR (test outcome positive rate)
+6. TONR (test outcome negative rate)
+7. PPV (positive predictive value)
+8. NPV (negative predictive value)
+9. FDR (false discovery rate)
+10. FOR (false omission rate)
+11. Class accuracy
+12. Class error rate
 
 Overall metrics
 

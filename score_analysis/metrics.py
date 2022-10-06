@@ -373,6 +373,68 @@ def far_ci(matrix: np.ndarray, alpha: float = 0.05) -> np.ndarray:
     return fpr_ci(matrix, alpha)
 
 
+def topr(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    Test Outcome Positive Rate. Proportion of samples where test detects condition.
+
+    Formula::
+
+        TOPR = TOP / N = (TPR + FPR) / (TPR + FPR + TNR + FNR)
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...).
+    """
+    tops = top(matrix)
+    pops = pop(matrix)
+    res = np.divide(
+        tops, pops, out=np.full_like(tops, np.nan, dtype=float), where=n != 0
+    )
+    res = res.item() if res.ndim == 0 else res  # Reduce to scalar
+    return res
+
+
+def tonr(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    Test Outcome Negative Rate.
+    Proportion of samples where test does not detect condition.
+
+    Formula::
+
+        TONR = TON / N = (TNR + FNR) / (TPR + FPR + TNR + FNR)
+
+    Args:
+        matrix: Array of shape (..., 2, 2).
+
+    Returns:
+        Array of shape (...).
+    """
+    tons = ton(matrix)
+    pops = pop(matrix)
+    res = np.divide(
+        tons, pops, out=np.full_like(tons, np.nan, dtype=float), where=n != 0
+    )
+    res = res.item() if res.ndim == 0 else res  # Reduce to scalar
+    return res
+
+
+# Aliases for within Onfido use.
+def acceptance_rate(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    Acceptance Rate. Alias for :func:`topr`.
+    """
+    return topr(matrix)
+
+
+def rejection_rate(matrix: np.ndarray) -> Union[np.ndarray, float]:
+    """
+    Rejection Rate. Alias for :func:`tonr`.
+    """
+    return tonr(matrix)
+
+
 def ppv(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
     Positive Predictive Value for binary confusion matrices.

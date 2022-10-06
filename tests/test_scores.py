@@ -113,7 +113,91 @@ def test_fnr_etc():
 )
 def test_threshold_at_tpr(pos, tpr, score_class, equal_class, expected):
     scores = Scores(pos, [], score_class=score_class, equal_class=equal_class)
-    threshold = scores.threshold_at_tpr(tpr)
+    threshold = scores.threshold_at_tpr(tpr=tpr)
+    np.testing.assert_allclose(threshold, expected, atol=1e-10)
+
+
+@pytest.mark.parametrize(
+    "pos, neg, topr, score_class, equal_class, expected",
+    [
+        # First example
+        [
+            [1, 2, 3, 4],
+            [1, 2, 3, 4],
+            [0, 0.25, 0.5, 0.75, 1],
+            "pos",
+            "pos",
+            [4, 4, 3, 2, 1],
+        ],
+        [
+            [1, 3, 5, 7],
+            [2, 4, 6, 8],
+            [0.0625, 0.1875, 0.3125, 0.4375, 0.5625, 0.6875, 0.8125, 0.9375],
+            "pos",
+            "pos",
+            [8, 7.5, 6.5, 5.5, 4.5, 3.5, 2.5, 1.5],
+        ],
+        [
+            [1, 2, 3, 4],
+            [1, 2, 3, 4],
+            [0, 0.25, 0.5, 0.75, 1],
+            "pos",
+            "neg",
+            [4, 3, 2, 1, 1],
+        ],
+        [
+            [1, 3, 5, 7],
+            [2, 4, 6, 8],
+            [0.0625, 0.1875, 0.3125, 0.4375, 0.5625, 0.6875, 0.8125, 0.9375],
+            "pos",
+            "neg",
+            [7.5, 6.5, 5.5, 4.5, 3.5, 2.5, 1.5, 1],
+        ],
+        [
+            [1, 2, 3, 4],
+            [1, 2, 3, 4],
+            [0, 0.25, 0.5, 0.75, 1],
+            "neg",
+            "pos",
+            [1, 1, 2, 3, 4],
+        ],
+        [
+            [1, 3, 5, 7],
+            [2, 4, 6, 8],
+            [0.0625, 0.1875, 0.3125, 0.4375, 0.5625, 0.6875, 0.8125, 0.9375],
+            "neg",
+            "pos",
+            [1, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5],
+        ],
+        [
+            [1, 2, 3, 4],
+            [1, 2, 3, 4],
+            [0, 0.25, 0.5, 0.75, 1],
+            "neg",
+            "neg",
+            [1, 2, 3, 4, 4],
+        ],
+        [
+            [1, 3, 5, 7],
+            [2, 4, 6, 8],
+            [0.0625, 0.1875, 0.3125, 0.4375, 0.5625, 0.6875, 0.8125, 0.9375],
+            "neg",
+            "neg",
+            [1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8],
+        ],
+        # Simple interpolation
+        [[0, 1], [0, 1], 0.6, "pos", "pos", 0.6],
+        [[0, 1], [0, 1], 0.6, "pos", "neg", 0],
+        [[0, 1], [0, 1], 0.6, "neg", "pos", 0.4],
+        [[0, 1], [0, 1], 0.6, "neg", "neg", 1],
+        # Edge cases
+        [[0, 1], [0, 1], -0.1, "pos", "pos", 1],
+        [[0, 1], [0, 1], 1.1, "pos", "pos", 0],
+    ],
+)
+def test_threshold_at_topr(pos, neg, topr, score_class, equal_class, expected):
+    scores = Scores(pos, neg, score_class=score_class, equal_class=equal_class)
+    threshold = scores.threshold_at_topr(topr=topr)
     np.testing.assert_allclose(threshold, expected, atol=1e-10)
 
 
@@ -126,6 +210,10 @@ def test_invalid_threshold_at_tpr_etc():
         Scores(pos=[1, 2], neg=[]).threshold_at_tnr(0.5)
     with pytest.raises(ValueError):
         Scores(pos=[1, 2], neg=[]).threshold_at_fpr(0.5)
+    with pytest.raises(ValueError):
+        Scores(pos=[], neg=[]).threshold_at_topr(0.5)
+    with pytest.raises(ValueError):
+        Scores(pos=[], neg=[]).threshold_at_tonr(0.5)
 
 
 @pytest.mark.parametrize(
@@ -172,6 +260,39 @@ def test_threshold_setting(scores, ratio, score_class, equal_class):
     np.testing.assert_allclose(threshold, expected, atol=1e-10)
 
 
+@pytest.mark.parametrize(
+    "scores, ratio, score_class, equal_class",
+    [
+        [[1, 2, 3, 4], [0, 0.25, 0.5, 0.75, 1], "pos", "pos"],
+        [[1, 2, 3, 4], [0.125, 0.375, 0.625, 0.875], "pos", "pos"],
+        [[1, 2, 3, 4], [0, 0.25, 0.5, 0.75, 1], "pos", "neg"],
+        [[1, 2, 3, 4], [0.125, 0.375, 0.625, 0.875], "pos", "neg"],
+        [[1, 2, 3, 4], [0, 0.25, 0.5, 0.75, 1], "neg", "pos"],
+        [[1, 2, 3, 4], [0.125, 0.375, 0.625, 0.875], "neg", "pos"],
+        [[1, 2, 3, 4], [0, 0.25, 0.5, 0.75, 1], "neg", "neg"],
+        [[1, 2, 3, 4], [0.125, 0.375, 0.625, 0.875], "neg", "neg"],
+        # Simple interpolation
+        [[0, 1], 0.6, "pos", "pos"],
+        [[0, 1], 0.6, "pos", "neg"],
+        [[0, 1], 0.6, "neg", "pos"],
+        [[0, 1], 0.6, "neg", "neg"],
+        # Edge cases
+        [[0, 1], -0.1, "pos", "pos"],
+        [[0, 1], 1.1, "pos", "pos"],
+    ],
+)
+def test_threshold_setting_outcome(scores, ratio, score_class, equal_class):
+    # We reduce TONR to TOPR calculations
+    score_obj = Scores(scores, [], score_class=score_class, equal_class=equal_class)
+    expected = score_obj.threshold_at_topr(ratio)
+
+    # TONR
+    reverse_class = "neg" if equal_class == "pos" else "pos"
+    score_obj = Scores([], scores, score_class=score_class, equal_class=reverse_class)
+    threshold = score_obj.threshold_at_tonr(1.0 - np.asarray(ratio))
+    np.testing.assert_allclose(threshold, expected, atol=1e-10)
+
+
 def test_threshold_setting_easy_pos():
     """Testing threshold setting in the presence of easy positive samples."""
     scores = Scores(pos=range(100), neg=[])
@@ -185,6 +306,11 @@ def test_threshold_setting_easy_pos():
     fnr = [0.02, 0.045, 0.1, 0.3]
     np.testing.assert_allclose(
         scores.threshold_at_fnr(fnr), scores_easy.threshold_at_fnr(fnr)
+    )
+
+    topr = [0.7, 0.8, 0.9, 0.912]
+    np.testing.assert_allclose(
+        scores.threshold_at_topr(topr), scores_easy.threshold_at_topr(topr)
     )
 
 
@@ -201,6 +327,11 @@ def test_threshold_setting_easy_neg():
     fpr = [0.02, 0.045, 0.1, 0.3]
     np.testing.assert_allclose(
         scores.threshold_at_fpr(fpr), scores_easy.threshold_at_fpr(fpr)
+    )
+
+    tonr = [0.7, 0.8, 0.9, 0.912]
+    np.testing.assert_allclose(
+        scores.threshold_at_tonr(tonr), scores_easy.threshold_at_tonr(tonr)
     )
 
 
@@ -399,6 +530,8 @@ def test_pointwise_cm_shape():
         [Scores.threshold_at_fnr, Scores.threshold_at_frr, (0.3,)],
         [Scores.threshold_at_tnr, Scores.threshold_at_trr, (0.3,)],
         [Scores.threshold_at_fpr, Scores.threshold_at_far, (0.3,)],
+        [Scores.threshold_at_topr, Scores.threshold_at_acceptance_rate, (0.3,)],
+        [Scores.threshold_at_tonr, Scores.threshold_at_rejection_rate, (0.3,)],
     ],
 )
 def test_aliases(original, alias, args):

@@ -465,6 +465,34 @@ class ConfusionMatrix:
         return metrics.fpr_ci(self.matrix, alpha=alpha)
 
     @cm_class_metric
+    def topr(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
+        """
+        Test Outcome Positive Rate. Alias for :func:`~ConfusionMatrix.topr`.
+        """
+        return metrics.topr(self.matrix)
+
+    @cm_class_metric
+    def tonr(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
+        """
+        Test Outcome Negative Rate. Alias for :func:`~ConfusionMatrix.tonr`.
+        """
+        return metrics.tonr(self.matrix)
+
+    @cm_class_metric
+    def acceptance_rate(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
+        """
+        Acceptance Rate. Alias for :func:`~ConfusionMatrix.acceptance_rate`.
+        """
+        return metrics.acceptance_rate(self.matrix)
+
+    @cm_class_metric
+    def rejection_rate(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
+        """
+        Rejection Rate. Alias for :func:`~ConfusionMatrix.rejection_rate`.
+        """
+        return metrics.rejection_rate(self.matrix)
+
+    @cm_class_metric
     def ppv(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """Positive Predictive Value"""
         return metrics.ppv(self.matrix)

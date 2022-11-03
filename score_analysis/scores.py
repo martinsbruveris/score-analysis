@@ -501,6 +501,63 @@ class Scores:
         """
         return self.threshold_at_tonr(tonr=rejection_rate)
 
+    def threshold_at_metric(
+        self,
+        target,
+        metric: Union[str, Callable],
+        points: Optional[Union[int, np.ndarray]] = None,
+    ):
+        """
+        General function for setting thresholds at abritrary metrics. No assumption is
+        made about the metric being monotone or the threshold being unique.
+
+        Given a metric function and a target value, the function will find all values
+        for the threshold such that metric(threshold) = target.
+
+        If N = len(pos) + len(neg) is the number of scores and T = len(target) is the
+        number of thresholds we want to set, this function has complexity O(N*T),
+        because it searches over the whole score space to find all solutions. We can
+        speed up the function by considering only a subset of points.
+
+        Args:
+            target: Target points at which to set the threshold.
+            metric: Can be a string indicating a member function of the Scores class
+                or a callable with signature::
+
+                    metric(sample: Scores, threshold: np.ndarray) -> np.ndarray
+            points: If a scalar, we use this many linearly spaces scores between
+                min(pos, neg) and max(pos, neg). If given an array, we evaluate the
+                metric at exactly these points.
+
+        Returns:
+            A list threshold of the same length as target of arrays such that
+            threshold[j] is a strictly increasing array containing all solutions of the
+            equation metric(theta) = target[j].
+        """
+        if isinstance(metric, str):
+            metric = getattr(Scores, metric)
+
+        if points is None:
+            points = np.sort(np.concatenate([self.pos, self.neg]))
+            if len(points) < 2:
+                raise ValueError("At least two values are required to set thresholds.")
+        elif isinstance(points, int):
+            min_score = min(
+                self.pos[0] if len(self.pos) > 0 else np.inf,
+                self.neg[0] if len(self.neg) > 0 else np.inf,
+            )
+            max_score = max(
+                self.pos[-1] if len(self.pos) > 0 else -np.inf,
+                self.neg[-1] if len(self.neg) > 0 else -np.inf,
+            )
+            if min_score >= max_score:
+                raise ValueError("At least two values are required to set thresholds.")
+            points = np.linspace(min_score, max_score, points, endpoint=True)
+            print(points)
+
+        threshold = utils.invert_pl_function(x=points, y=metric(self, points), t=target)
+        return threshold
+
     def eer(self) -> Tuple[float, float]:
         """
         Calculates Equal Error Rate, i.e., where FPR = FNR (or, equivalently, where

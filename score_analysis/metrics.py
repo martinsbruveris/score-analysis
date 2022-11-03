@@ -390,7 +390,7 @@ def topr(matrix: np.ndarray) -> Union[np.ndarray, float]:
     tops = top(matrix)
     pops = pop(matrix)
     res = np.divide(
-        tops, pops, out=np.full_like(tops, np.nan, dtype=float), where=n != 0
+        tops, pops, out=np.full_like(tops, np.nan, dtype=float), where=pops != 0
     )
     res = res.item() if res.ndim == 0 else res  # Reduce to scalar
     return res
@@ -414,7 +414,7 @@ def tonr(matrix: np.ndarray) -> Union[np.ndarray, float]:
     tons = ton(matrix)
     pops = pop(matrix)
     res = np.divide(
-        tons, pops, out=np.full_like(tons, np.nan, dtype=float), where=n != 0
+        tons, pops, out=np.full_like(tons, np.nan, dtype=float), where=pops != 0
     )
     res = res.item() if res.ndim == 0 else res  # Reduce to scalar
     return res

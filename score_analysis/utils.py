@@ -1,7 +1,7 @@
 """
 This module contains internal utility functions.
 """
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 import numpy as np
 import scipy.stats
@@ -127,3 +127,78 @@ def bootstrap_ci(
         raise ValueError(f"Unknown value for bootstrap_method: {method}")
 
     return ci
+
+
+def invert_pl_function(x: np.ndarray, y: np.ndarray, t: np.ndarray) -> List[np.ndarray]:
+    """
+    Inverts piecewise linear function.
+
+    The points (x[i], y[i]) define the function is given by f(x[i]) = y[i] with
+    piecewise linear interpolation in between. We assume that x is an increasing
+    vector, i.e., x[i] <= x[i+1]; x does not have to be strictly increasing, but
+    if x[i] = x[i+1], then we assume that also y[i] = y[i+1].
+
+    The function finds all values s[j], such that f(s[j]) = t[j]. Because the number
+    of solutions can vary for different t[j], we return a list of the same length
+    as t, not an array.
+
+    If the equation f(z) = t[j] has no solution, we return the closest point s[j],
+    i.e., |f(s[j]) - t[j]| = min_z |f(z) - t[j]|. We always return only one solution
+    in this case.
+
+    Args:
+         x: Increasing vector of points defining the function.
+         y: Vector of same length as x defining the function values.
+         t: Vector of points at which to invert the function.
+
+    Returns:
+        A list s of the same length as t of arrays such that s[j] is a strictly
+        increasing array containing all solutions of the equation f(z) = t[j].
+    """
+    x = np.asarray(x)
+    y = np.asarray(y)
+    t = np.asarray(t)
+    t_scalar = t.ndim == 0  # Is input a scalar?
+
+    x = x[:, np.newaxis]  # (N, 1)
+    y = y[:, np.newaxis]  # (N, 1)
+    # We turn scalar t into a 1-dim array + extra dimension for broadcasting
+    t = t[np.newaxis, np.newaxis] if t_scalar else t[np.newaxis, :]  # (1, T)
+
+    # Find out where we cross the threshold
+    crossing_up = (y[:-1] <= t) & (y[1:] > t)
+    crossing_down = (y[:-1] >= t) & (y[1:] < t)
+    crossing = crossing_up | crossing_down
+    # Get indices of crossings; Note that np.nonzero tests the array in row-major
+    # order, meaning that after transposing for each t index, the s indices will
+    # be already in increasing order.
+    t_indices, s_indices = np.nonzero(crossing.T)
+
+    # Find closest points to given t values in case we don't find exact solutions.
+    min_ind = np.argmin(np.abs(y - t), axis=0)  # (T,)
+    s_min = x[min_ind]
+
+    t = t[0]  # We are done with broadcasting
+    x = x[:, 0]
+    y = y[:, 0]
+
+    s = [[] for _ in t]
+    # Find all solutions given the crossing indices
+    for t_ind, j in zip(t_indices, s_indices):
+        # Apply linear interpolation between x[j] and x[j+1]
+        la = (t[t_ind] - y[j]) / (y[j + 1] - y[j])
+        z = (1 - la) * x[j] + la * x[j + 1]
+        s[t_ind].append(z)
+
+    # Deal with cases where we don't have solutions
+    for j in range(len(s)):
+        if len(s[j]) == 0:
+            s[j].append(s_min[j])
+
+    # Convert to list of arrays
+    s = [np.asarray(z) for z in s]
+
+    if t_scalar:  # Reduce back to scalar
+        s = s[0]
+
+    return s

@@ -10,6 +10,35 @@ def test_from_labels():
     np.testing.assert_equal(scores.neg, [1])
 
 
+def test_properties():
+    scores = Scores(
+        pos=[1, 2, 3],
+        neg=[6],
+        nb_easy_pos=2,
+        nb_easy_neg=4,
+    )
+    assert scores.hard_pos_ratio == 0.6
+    assert scores.hard_neg_ratio == 0.2
+    assert scores.easy_pos_ratio == 0.4
+    assert scores.easy_neg_ratio == 0.8
+    assert scores.nb_easy_samples == 6
+    assert scores.nb_hard_samples == 4
+    assert scores.nb_all_samples == 10
+    assert scores.easy_ratio == 0.6
+    assert scores.hard_ratio == 0.4
+
+    scores = Scores(pos=[], neg=[], nb_easy_pos=0, nb_easy_neg=0)
+    assert scores.hard_pos_ratio == 1.0
+    assert scores.hard_neg_ratio == 1.0
+    assert scores.easy_pos_ratio == 0.0
+    assert scores.easy_neg_ratio == 0.0
+    assert scores.nb_easy_samples == 0
+    assert scores.nb_hard_samples == 0
+    assert scores.nb_all_samples == 0
+    assert scores.easy_ratio == 0.0
+    assert scores.hard_ratio == 1.0
+
+
 @pytest.mark.parametrize(
     "pos, neg, threshold, score_class, equal_class, expected",
     [
@@ -537,3 +566,28 @@ def test_pointwise_cm_shape():
 def test_aliases(original, alias, args):
     scores = Scores(pos=[1, 2, 3, 4, 5, 6], neg=[0.2, 1.2, 1.3, 3, 4, 4, 4])
     np.testing.assert_equal(original(scores, *args), alias(scores, *args))
+
+
+@pytest.mark.parametrize(
+    "target, metric, points, expected",
+    [
+        [0.5, "topr", None, 4],
+        [0.5, Scores.topr, None, 4],
+        [0.5, Scores.topr, [0, 1], 1],
+        [0.5, Scores.topr, 2, 4.0],
+    ],
+)
+def test_threshold_at_metric(target, metric, points, expected):
+    scores = Scores(pos=[0, 1, 2, 3], neg=[4, 5, 6, 7])
+    result = scores.threshold_at_metric(target=target, metric=metric, points=points)
+    np.testing.assert_equal(result, expected)
+
+
+def test_threshold_at_metrics_not_enough_scores():
+    with pytest.raises(ValueError):
+        scores = Scores(pos=[1], neg=[])
+        scores.threshold_at_metric(0.2, "fpr", None)
+
+    with pytest.raises(ValueError):
+        scores = Scores(pos=[], neg=[1])
+        scores.threshold_at_metric(0.2, "fpr", 10)

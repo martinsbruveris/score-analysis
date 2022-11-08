@@ -591,3 +591,25 @@ def test_threshold_at_metrics_not_enough_scores():
     with pytest.raises(ValueError):
         scores = Scores(pos=[], neg=[1])
         scores.threshold_at_metric(0.2, "fpr", 10)
+
+
+@pytest.mark.parametrize(
+    "pos, neg, targets",
+    [
+        [[1, 2, 3, 4], [1, 2, 3, 4], [0, 0.25, 0.5, 0.75, 1]],
+        [[0, 1], [0, 1], 0.6],
+        [[0, 1], [0, 1], -0.1],
+        [[0, 1], [0, 1], 1.1],
+    ],
+)
+def test_consistency_of_thresholds(pos, neg, targets):
+    scores = Scores(pos=pos, neg=neg)
+    thresholds_at_tpr = scores.threshold_at_tpr(targets)
+    thresholds_at_metric_tpr = scores.threshold_at_metric(
+        target=targets, metric=Scores.tpr, points=None
+    )
+    # reshape and concatenate
+    thresholds_at_metric_tpr = np.concatenate(
+        [threshold.reshape(-1) for threshold in thresholds_at_metric_tpr]
+    )
+    np.testing.assert_array_almost_equal(thresholds_at_tpr, thresholds_at_metric_tpr)

@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.1.6 - 2022-11-08
+
+- Added threshold setting at arbitrary metrics.
+
 ## v0.1.2 - 2022-07-04
 
 - Fixing bug with bootstrapping CIs when using virtual datasets.

@@ -1,6 +1,6 @@
 # Change Log
 
-## Unpublished
+## v0.2.0 - 2024-01-04
 
 - Changed the interface for bootstrap settings. All bootstrap settings are now combined
   in one BootstrapConfig class that is passed to all functions that require 

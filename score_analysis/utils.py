@@ -1,6 +1,7 @@
 """
 This module contains internal utility functions.
 """
+
 from typing import List, Optional, Union
 
 import numpy as np
@@ -35,7 +36,7 @@ def binomial_ci(count: np.ndarray, nobs: np.ndarray, alpha: float = 0.05):
 def bootstrap_ci(
     theta: np.ndarray,
     theta_hat: Optional[Union[float, np.ndarray]] = None,
-    alpha: float = 0.05,
+    alpha: Optional[Union[float, np.ndarray]] = 0.05,
     *,
     method: str = "quantile",
 ) -> np.ndarray:
@@ -51,7 +52,8 @@ def bootstrap_ci(
         theta: Array of shape (N, Y), where N is the number of samples.
         theta_hat: Array of shape (Y,) with the empirical estimate of the metric. This
             is only needed for the methods "bc" and "bca".
-        alpha: Significance level. In range (0, 1).
+        alpha: Significance level. In range (0, 1). Vector-valued alpha only supported
+            with "quantile" method.
         method: Method to compute the CI from the bootstrap samples.
             Possible values are
 
@@ -66,17 +68,25 @@ def bootstrap_ci(
             for details.
 
     Returns:
-        Returns an array of shape (Y, 2) with lower and upper bounds of the CI.
+        Returns an array of shape (Y, 2) with lower and upper bounds of the CI. For
+        vector-valued alpha of shape (Z,) the return values has shape (Y, Z, 2).
     """
+    alpha = np.asarray(alpha)  # (Z,)
+    alpha_shape = alpha.shape
+    alpha = np.reshape(alpha, -1)  # (Z',)
+
     alpha_lower = alpha / 2.0
     alpha_upper = 1 - alpha / 2.0
 
     if method == "quantile":
-        ci = np.quantile(theta, q=[alpha_lower, alpha_upper], axis=0)  # (2, Y)
-        ci = np.moveaxis(ci, source=0, destination=-1)  # (Y, 2)
+        alpha_joint = np.stack([alpha_lower, alpha_upper], axis=0)  # (2, Z')
+        ci = np.quantile(theta, q=alpha_joint, axis=0)  # (2, Z', Y)
+        ci = np.moveaxis(ci, source=[0, 1], destination=[-1, -2])  # (Y, Z', 2)
+        ci = np.reshape(ci, theta.shape[1:] + alpha_shape + (2,))  # (Y, Z, 2)
     elif method in {"bc", "bca"}:
         if theta_hat is None:
             raise ValueError(f"Must provide theta_hat when using method {method}.")
+        theta_hat = np.asarray(theta_hat)
         theta_hat = theta_hat[np.newaxis]  # (1, Y)
 
         # Flatten the metric shape to a vector

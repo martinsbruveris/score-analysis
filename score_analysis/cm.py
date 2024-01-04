@@ -1,6 +1,7 @@
 """
 ConfusionMatrix module.
 """
+
 from __future__ import annotations
 
 from functools import wraps
@@ -467,28 +468,28 @@ class ConfusionMatrix:
     @cm_class_metric
     def topr(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """
-        Test Outcome Positive Rate. Alias for :func:`~ConfusionMatrix.topr`.
+        Test Outcome Positive Rate.
         """
         return metrics.topr(self.matrix)
 
     @cm_class_metric
     def tonr(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """
-        Test Outcome Negative Rate. Alias for :func:`~ConfusionMatrix.tonr`.
+        Test Outcome Negative Rate.
         """
         return metrics.tonr(self.matrix)
 
     @cm_class_metric
     def acceptance_rate(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """
-        Acceptance Rate. Alias for :func:`~ConfusionMatrix.acceptance_rate`.
+        Acceptance Rate. Alias for :func:`~ConfusionMatrix.topr`.
         """
         return metrics.acceptance_rate(self.matrix)
 
     @cm_class_metric
     def rejection_rate(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """
-        Rejection Rate. Alias for :func:`~ConfusionMatrix.rejection_rate`.
+        Rejection Rate. Alias for :func:`~ConfusionMatrix.tonr`.
         """
         return metrics.rejection_rate(self.matrix)
 

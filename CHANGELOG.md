@@ -1,5 +1,12 @@
 # Change Log
 
+## Unpublished
+
+- Changed the interface for bootstrap settings. All bootstrap settings are now combined
+  in one BootstrapConfig class that is passed to all functions that require 
+  bootstrapping.
+- Improved the confidence band computation for ROC curves.
+
 ## v0.1.6 - 2022-11-08
 
 - Added threshold setting at arbitrary metrics.

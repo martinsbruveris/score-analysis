@@ -289,6 +289,8 @@ def test_binary_tpr_etc():
     np.testing.assert_allclose(cm.fnr(), 0.75)
     np.testing.assert_allclose(cm.tnr(), 0.6)
     np.testing.assert_allclose(cm.fpr(), 0.4)
+    np.testing.assert_allclose(cm.topr(), 3.0 / 9.0)
+    np.testing.assert_allclose(cm.tonr(), 6.0 / 9.0)
     np.testing.assert_allclose(cm.ppv(), 1.0 / 3.0)
     np.testing.assert_allclose(cm.npv(), 0.5)
     np.testing.assert_allclose(cm.fdr(), 2.0 / 3.0)
@@ -324,6 +326,8 @@ def test_binary_tpr_ci_etc(matrix, expected, metric):
         [ConfusionMatrix.fnr_ci, ConfusionMatrix.frr_ci, {"alpha": 0.1}],
         [ConfusionMatrix.tnr_ci, ConfusionMatrix.trr_ci, {"alpha": 0.1}],
         [ConfusionMatrix.fpr_ci, ConfusionMatrix.far_ci, {"alpha": 0.1}],
+        [ConfusionMatrix.topr, ConfusionMatrix.acceptance_rate, {}],
+        [ConfusionMatrix.tonr, ConfusionMatrix.rejection_rate, {}],
     ],
 )
 def test_aliases(original, alias, kwargs):

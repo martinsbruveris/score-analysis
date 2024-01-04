@@ -11,6 +11,22 @@ def test_bootstrap_ci_error(method):
 
 
 @pytest.mark.parametrize(
+    "theta_shape, alpha_shape",
+    [
+        ((3, 4), ()),
+        ((3, 4), (5,)),
+        ((3, 4), (5, 6, 7)),
+        ((4, 5, 6), (7, 8)),
+    ],
+)
+def test_bootstrap_ci_shape(theta_shape, alpha_shape):
+    theta = np.random.rand(*theta_shape)
+    alpha = np.random.rand(*alpha_shape)
+    ci = utils.bootstrap_ci(theta, alpha=alpha, method="quantile")
+    assert ci.shape == theta_shape[1:] + alpha_shape + (2,)
+
+
+@pytest.mark.parametrize(
     "x, y, t, s",
     [
         # Multiple t, scalar output for each

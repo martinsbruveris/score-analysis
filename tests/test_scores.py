@@ -1,13 +1,19 @@
 import numpy as np
 import pytest
 
-from score_analysis.scores import Scores, pointwise_cm
+from score_analysis.scores import BootstrapConfig, Scores, pointwise_cm
 
 
 def test_from_labels():
     scores = Scores.from_labels(labels=[2, 2, 3], scores=[3, 2, 1], pos_label=2)
     np.testing.assert_equal(scores.pos, [2, 3])
     np.testing.assert_equal(scores.neg, [1])
+
+
+def test_swap():
+    scores = Scores(pos=[1, 2], neg=[3, 4], score_class="pos", equal_class="neg")
+    expected = Scores(pos=[3, 4], neg=[1, 2], score_class="neg", equal_class="pos")
+    assert scores.swap() == expected
 
 
 def test_properties():
@@ -116,6 +122,12 @@ def test_fnr_etc():
 
     fpr = scores.fpr(threshold=2.5)
     np.testing.assert_allclose(fpr, 0.4)
+
+    topr = scores.topr(threshold=2.5)
+    np.testing.assert_allclose(topr, 3.0 / 9.0)
+
+    tonr = scores.tonr(threshold=2.5)
+    np.testing.assert_allclose(tonr, 6.0 / 9.0)
 
 
 @pytest.mark.parametrize(
@@ -402,18 +414,62 @@ def test_find_root_invalid_input():
         Scores._find_root(lambda _: 1.0, 0.0, 1.0, True)
 
 
-#
-def test_bootstrap_sample_replacement():
-    scores = Scores(
-        pos=[1, 2, 3, 4], neg=[1, 2, 3], score_class="neg", equal_class="neg"
+@pytest.mark.parametrize("stratified_sampling", [True, False])
+@pytest.mark.parametrize("smoothing", [True, False])
+def test_bootstrap_sample_replacement(stratified_sampling, smoothing):
+    """Tests the basic mechanics of replacement sampling, with various parameters."""
+    scores = Scores(pos=[1, 2, 3], neg=[0, 1])
+    sample = scores.bootstrap_sample(
+        config=BootstrapConfig(
+            sampling_method="replacement",
+            stratified_sampling=stratified_sampling,
+            smoothing=smoothing,
+        )
     )
+    assert sample.nb_easy_samples == 0
+    assert sample.nb_hard_samples == scores.nb_hard_samples
 
     with pytest.raises(ValueError):
-        scores.bootstrap_sample(method="no_such_method")
+        scores.bootstrap_sample(
+            config=BootstrapConfig(sampling_method="no_such_method")
+        )
 
-    sample = scores.bootstrap_sample(method="replacement")
-    assert sample.pos.size == scores.pos.size
-    assert sample.neg.size == scores.neg.size
+
+@pytest.mark.parametrize("nb_hard_pos, nb_hard_neg", [(0, 0), (2, 2)])
+@pytest.mark.parametrize("nb_pos, nb_neg", [(0, 0), (2, 0), (0, 2), (1, 1), (2, 2)])
+def test_bootstrap_sample_hard_samples(nb_pos, nb_neg, nb_hard_pos, nb_hard_neg):
+    """
+    Tests that with non-stratified sampling the bootstrap sample always contains
+    at least one hard sample.
+    """
+    scores = Scores(
+        pos=np.arange(nb_pos),
+        neg=np.arange(nb_neg),
+        nb_easy_pos=nb_hard_pos,
+        nb_easy_neg=nb_hard_neg,
+    )
+
+    # We repeat sampling several times, because it is random, and we want to catch
+    # edge cases, where some samples contain no positives or negatives.
+    config = BootstrapConfig(sampling_method="replacement", stratified_sampling=False)
+    for _ in range(100):
+        sample = scores.bootstrap_sample(config)
+        # If the original scores had at least one hard sample, then the bootstrap sample
+        # also has to have at least one hard sample
+        if scores.nb_hard_pos > 0:
+            assert sample.nb_hard_pos > 0
+        if scores.nb_hard_neg > 0:
+            assert sample.nb_hard_neg > 0
+
+
+def test_bootstrap_sample_stratified():
+    """Tests that stratified sampling preserves the number of pos and neg scores."""
+    scores = Scores(pos=[1, 2, 3, 4], neg=[1, 2], score_class="neg", equal_class="neg")
+    config = BootstrapConfig(sampling_method="replacement", stratified_sampling=True)
+    sample = scores.bootstrap_sample(config=config)
+
+    assert sample.nb_hard_pos == scores.nb_hard_pos
+    assert sample.nb_hard_neg == scores.nb_hard_neg
     assert set(sample.pos).issubset(set(scores.pos))
     assert set(sample.neg).issubset(set(scores.neg))
     assert sample.score_class == scores.score_class
@@ -421,12 +477,17 @@ def test_bootstrap_sample_replacement():
 
 
 def test_bootstrap_sample_proportion():
+    """Tests proportional bootstrap sampling."""
     scores = Scores(pos=[1, 2, 3, 4, 5, 6], neg=[1, 2, 3, 4])
 
     with pytest.raises(ValueError):
-        scores.bootstrap_sample(method="proportion", ratio=None)
+        scores.bootstrap_sample(
+            config=BootstrapConfig(sampling_method="proportion", ratio=None)
+        )
 
-    sample = scores.bootstrap_sample(method="proportion", ratio=0.5)
+    sample = scores.bootstrap_sample(
+        config=BootstrapConfig(sampling_method="proportion", ratio=0.5)
+    )
     assert sample.pos.size == 3
     assert sample.neg.size == 2
     assert set(sample.pos).issubset(set(scores.pos))
@@ -434,12 +495,15 @@ def test_bootstrap_sample_proportion():
 
 
 def test_bootstrap_sample_callable():
+    """Tests bootstrap sampling with a custom callable."""
     scores = Scores(pos=[1, 2, 3, 4], neg=[1, 2, 3])
 
     with pytest.raises(ValueError):
-        scores.bootstrap_sample(method=None)
+        scores.bootstrap_sample(config=BootstrapConfig(sampling_method=None))
 
-    sample = scores.bootstrap_sample(lambda x: x)  # Identity sampling
+    sample = scores.bootstrap_sample(
+        config=BootstrapConfig(sampling_method=lambda x: x)
+    )  # Identity sampling
     assert sample == scores
 
 
@@ -447,7 +511,9 @@ def test_bootstrap_sample_callable():
 @pytest.mark.parametrize("nb_samples", [1, 3])
 def test_bootstrap_metric(metric, nb_samples):
     scores = Scores(pos=[1, 2, 3, 4], neg=[1, 2, 3])
-    samples = scores.bootstrap_metric(metric, nb_samples=nb_samples)
+    samples = scores.bootstrap_metric(
+        metric, config=BootstrapConfig(nb_samples=nb_samples, stratified_sampling=True)
+    )
     assert samples.shape == (nb_samples, 2)
 
 
@@ -456,7 +522,10 @@ def test_bootstrap_ci_identity():
     nb_samples = 3
     # Testing with identity sampling, in which case CI should collapse
     ci = scores.bootstrap_ci(
-        metric="eer", nb_samples=nb_samples, sampling_method=lambda x: x
+        metric="eer",
+        config=BootstrapConfig(
+            nb_samples=nb_samples, sampling_method=lambda x: x, stratified_sampling=True
+        ),
     )
     eer = scores.eer()
     for j in range(nb_samples):
@@ -465,7 +534,9 @@ def test_bootstrap_ci_identity():
 
     # Test invalid bootstrap method
     with pytest.raises(ValueError):
-        scores.bootstrap_ci(metric="eer", bootstrap_method="no_such_method")
+        scores.bootstrap_ci(
+            metric="eer", config=BootstrapConfig(bootstrap_method="no_such_method")
+        )
 
 
 @pytest.mark.parametrize("bootstrap_method", ["quantile", "bc", "bca"])
@@ -476,13 +547,15 @@ def test_bootstrap_ci_gaussian(bootstrap_method):
         scores = Scores(pos=rng.normal(size=100), neg=[])
         ci = scores.bootstrap_ci(
             metric=lambda s: np.mean(s.pos),
-            bootstrap_method=bootstrap_method,
-            # We use a custom sampling method to make the test deterministic by fixing
-            # the random number generator
-            sampling_method=lambda s: Scores(
-                pos=rng.choice(s.pos, size=s.pos.size, replace=True), neg=[]
+            config=BootstrapConfig(
+                bootstrap_method=bootstrap_method,
+                # We use a custom sampling method to make the test deterministic by
+                # fixing the random number generator.
+                sampling_method=lambda s: Scores(
+                    pos=rng.choice(s.pos, size=s.pos.size, replace=True), neg=[]
+                ),
+                nb_samples=200,
             ),
-            nb_samples=200,
         )
         nb_inside += ci[0] < 0 < ci[1]
     # If the test starts failing, we should check if it is due to flakiness of the RNG.
@@ -555,6 +628,8 @@ def test_pointwise_cm_shape():
         [Scores.fnr, Scores.frr, (2,)],
         [Scores.tnr, Scores.trr, (2,)],
         [Scores.fpr, Scores.far, (2,)],
+        [Scores.topr, Scores.acceptance_rate, (2,)],
+        [Scores.tonr, Scores.rejection_rate, (2,)],
         [Scores.threshold_at_tpr, Scores.threshold_at_tar, (0.3,)],
         [Scores.threshold_at_fnr, Scores.threshold_at_frr, (0.3,)],
         [Scores.threshold_at_tnr, Scores.threshold_at_trr, (0.3,)],

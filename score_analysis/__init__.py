@@ -1,5 +1,6 @@
-from . import metrics, tools
+from . import metrics, tools, utils
 from .cm import ConfusionMatrix
-from .scores import Scores, pointwise_cm
+from .scores import BinaryLabel, BootstrapConfig, Scores, pointwise_cm
+from .tools import roc, roc_with_ci
 
 __version__ = "0.1.6"

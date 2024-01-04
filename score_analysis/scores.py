@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Optional, Tuple, Union
 
@@ -16,6 +18,58 @@ class BinaryLabel(Enum):
 
     pos = "pos"
     neg = "neg"
+
+
+SamplingMethod = Callable[["Scores"], "Scores"]
+
+
+@dataclass(frozen=True)
+class BootstrapConfig:
+    """
+    Bootstrap configuration for creating bootstrap samples and computing CIs.
+
+    Params:
+        nb_samples: Number of samples to use for bootstrapping.
+        bootstrap_method: Method to compute the CI from the bootstrap samples.
+            Possible values are
+
+            * "quantile" uses the alpha/2 and 1-alpha/2 quantiles of the
+              empirical metric distribution.
+            * "bc" applies bias correction to correct for the bias of the median
+              of the empirical distribution
+            * "bca" applies bias correction and acceleration to correct for non-
+              constant standard error.
+
+            See Ch. 11 of Computer Age Statistical Inference by Efron and Hastie
+            for details.
+        sampling_method: Sampling method to create bootstrap sample. Supported methods
+            are
+
+            * "replacement" creates a sample with the same number of positive and
+              negative scores using sampling with replacement.
+            * "proportion" creates a sample of size defined by ratio using sampling
+              without replacement. This is similar to cross-validation, where a
+              proportion of data is used in each iteration.
+            * A callable with signature::
+
+                method(source: Scores) -> Scores
+
+              creating one sample from a source Scores object.
+
+        stratified_sampling: TBA
+        smoothing: TBA
+        ratio: Size of sample when using proportional sampling. In range (0, 1).
+    """
+
+    nb_samples: int = 1_000
+    bootstrap_method: str = "bca"
+    sampling_method: Union[str, SamplingMethod] = "replacement"
+    stratified_sampling: bool = False
+    smoothing: bool = False
+    ratio: Optional[float] = None
+
+
+DEFAULT_BOOTSTRAP_CONFIG = BootstrapConfig()
 
 
 class Scores:
@@ -55,7 +109,7 @@ class Scores:
         self.neg = np.sort(self.neg)
 
     @property
-    def hard_pos_ratio(self):
+    def hard_pos_ratio(self) -> float:
         if self.nb_easy_pos > 0:
             return len(self.pos) / (len(self.pos) + self.nb_easy_pos)
         else:
@@ -63,7 +117,7 @@ class Scores:
             return 1.0
 
     @property
-    def hard_neg_ratio(self):
+    def hard_neg_ratio(self) -> float:
         if self.nb_easy_neg > 0:
             return len(self.neg) / (len(self.neg) + self.nb_easy_neg)
         else:
@@ -71,27 +125,43 @@ class Scores:
             return 1.0
 
     @property
-    def easy_pos_ratio(self):
+    def easy_pos_ratio(self) -> float:
         return 1.0 - self.hard_pos_ratio
 
     @property
-    def easy_neg_ratio(self):
+    def easy_neg_ratio(self) -> float:
         return 1.0 - self.hard_neg_ratio
 
     @property
-    def nb_easy_samples(self):
+    def nb_easy_samples(self) -> int:
         return self.nb_easy_pos + self.nb_easy_neg
 
     @property
-    def nb_hard_samples(self):
+    def nb_hard_pos(self) -> int:
+        return len(self.pos)
+
+    @property
+    def nb_hard_neg(self) -> int:
+        return len(self.neg)
+
+    @property
+    def nb_hard_samples(self) -> int:
         return len(self.pos) + len(self.neg)
 
     @property
-    def nb_all_samples(self):
+    def nb_all_pos(self) -> int:
+        return self.nb_easy_pos + len(self.pos)
+
+    @property
+    def nb_all_neg(self) -> int:
+        return self.nb_easy_neg + len(self.neg)
+
+    @property
+    def nb_all_samples(self) -> int:
         return self.nb_easy_samples + self.nb_hard_samples
 
     @property
-    def easy_ratio(self):
+    def easy_ratio(self) -> float:
         if self.nb_easy_samples > 0:
             return self.nb_easy_samples / self.nb_all_samples
         else:
@@ -99,7 +169,7 @@ class Scores:
             return 0.0
 
     @property
-    def hard_ratio(self):
+    def hard_ratio(self) -> float:
         return 1.0 - self.easy_ratio
 
     @staticmethod
@@ -637,70 +707,70 @@ class Scores:
 
     def bootstrap_sample(
         self,
-        method: Union[str, Callable] = "replacement",
-        ratio: Optional[float] = None,
+        config: BootstrapConfig = DEFAULT_BOOTSTRAP_CONFIG,
     ) -> Scores:
         """
-        Creates one bootstrap sample by sampling with the specified method.
-
-        Supported methods are
-
-        * "replacement" creates a sample with the same number of positive and negative
-          scores using sampling with replacement.
-        * "proportion" creates a sample of size defined by ratio using sampling without
-          replacement. This is similar to cross-validation, where a proportion of data
-          is used in each iteration.
-        * A callable with signature::
-
-            method(source: Scores) -> Scores
-
-          creating one sample from a source Scores object.
+        Creates one bootstrap sample by sampling with the specified configuration.
 
         Args:
-            method: Sampling method to create bootstrap sample. One of "replacement" or
-                "proportion".
-            ratio: Size of sample when using proportional sampling. In range (0, 1).
+            config: Bootstrap configuration.
 
         Returns:
             Scores object with the sampled scores.
         """
-        if method == "replacement":
-            # This code also takes into account uncertainty about the pos : neg
-            # ratio in the bootstrapped sample. Not used at the moment.
-            # n = self.pos.size + self.neg.size
-            # p = self.pos.size / n
-            # nb_pos = np.random.binomial(n, p)
-            # nb_neg = n - nb_pos
+        if config.sampling_method == "replacement":
+            if config.stratified_sampling:
+                # Stratified sampling does not change easy : hard and pos : neg ratios.
+                nb_easy_pos = self.nb_easy_pos
+                nb_easy_neg = self.nb_easy_neg
+                nb_hard_pos = self.nb_hard_pos
+                nb_hard_neg = self.nb_hard_neg
+            else:
+                # Non-stratified sampling also takes into account uncertainty about the
+                # pos : neg ratio in the bootstrapped sample.
+                p = (
+                    self.nb_all_pos / self.nb_all_samples
+                    if self.nb_all_samples > 0
+                    else 0.0
+                )
+                nb_pos = np.random.binomial(self.nb_all_samples, p)
+                nb_neg = self.nb_all_samples - nb_pos
 
-            # The number of positives and negatives in the sample is the same
-            nb_pos = self.pos.size + self.nb_easy_pos
-            nb_neg = self.neg.size + self.nb_easy_neg
+                # Try to have at least one positive and one negative sample.
+                if nb_pos == 0 and self.nb_all_pos > 0:
+                    nb_pos, nb_neg = 1, self.nb_all_samples - 1
+                if nb_neg == 0 and self.nb_all_neg > 0:
+                    nb_pos, nb_neg = self.nb_all_samples - 1, 1
 
-            # We need to find out how many easy samples there will be in the sample
-            nb_easy_pos = (
-                np.random.binomial(nb_pos, self.nb_easy_pos / nb_pos)
-                if nb_pos > 0
-                else 0
-            )
-            nb_easy_neg = (
-                np.random.binomial(nb_neg, self.nb_easy_neg / nb_neg)
-                if nb_neg > 0
-                else 0
-            )
-            nb_hard_pos = nb_pos - nb_easy_pos
-            nb_hard_neg = nb_neg - nb_easy_neg
+                # Find out how many easy and hard samples there will be.
+                nb_easy_pos = np.random.binomial(nb_pos, self.easy_pos_ratio)
+                nb_easy_neg = np.random.binomial(nb_neg, self.easy_neg_ratio)
+                nb_hard_pos = nb_pos - nb_easy_pos
+                nb_hard_neg = nb_neg - nb_easy_neg
+
+                # Try to have at least one hard positive and negative sample.
+                if nb_hard_pos == 0 and self.nb_hard_pos > 0:
+                    nb_hard_pos, nb_easy_pos = 1, nb_pos - 1
+                if nb_hard_neg == 0 and self.nb_hard_neg > 0:
+                    nb_hard_neg, nb_easy_neg = 1, nb_neg - 1
 
             # Sampling hard samples with replacement
-            pos = (
-                np.random.choice(self.pos, size=nb_hard_pos, replace=True)
-                if self.pos.size > 0
-                else []
-            )
-            neg = (
-                np.random.choice(self.neg, size=nb_hard_neg, replace=True)
-                if self.neg.size > 0
-                else []
-            )
+            pos = np.random.choice(self.pos, size=nb_hard_pos, replace=True)
+            neg = np.random.choice(self.neg, size=nb_hard_neg, replace=True)
+
+            if config.smoothing:
+
+                def _estimate_bandwidth(x: np.ndarray) -> float:
+                    # The rule for the bandwidth estimation is taken from the wiki page
+                    # https://en.wikipedia.org/wiki/Kernel_density_estimation
+                    iqr = np.quantile(x, 0.75) - np.quantile(x, 0.25)
+                    h = 0.9 * min(x.std(), iqr / 1.34) * math.pow(len(x), -0.2)
+                    return h
+
+                h_pos = _estimate_bandwidth(pos)
+                h_neg = _estimate_bandwidth(neg)
+                pos = pos + np.random.normal(loc=0.0, scale=h_pos, size=pos.shape)
+                neg = neg + np.random.normal(loc=0.0, scale=h_neg, size=neg.shape)
 
             scores = Scores(
                 pos=pos,
@@ -710,18 +780,18 @@ class Scores:
                 score_class=self.score_class,
                 equal_class=self.equal_class,
             )
-        elif method == "proportion":
-            if ratio is None:
+        elif config.sampling_method == "proportion":
+            if config.ratio is None:
                 raise ValueError("For proportional sampling, ratio has to be defined.")
             # Sampling a sample defined by ratio, without replacement
-            nb_pos = max(int(ratio * self.pos.size), 1)
-            nb_neg = max(int(ratio * self.neg.size), 1)
+            nb_pos = max(int(config.ratio * self.pos.size), 1)
+            nb_neg = max(int(config.ratio * self.neg.size), 1)
             pos = np.random.choice(self.pos, size=nb_pos, replace=False)
             neg = np.random.choice(self.neg, size=nb_neg, replace=False)
 
             # We also "sample" a proportional sample of easy sample
-            nb_easy_pos = int(ratio * self.nb_easy_pos)
-            nb_easy_neg = int(ratio * self.nb_easy_neg)
+            nb_easy_pos = int(config.ratio * self.nb_easy_pos)
+            nb_easy_neg = int(config.ratio * self.nb_easy_neg)
 
             scores = Scores(
                 pos=pos,
@@ -731,10 +801,10 @@ class Scores:
                 score_class=self.score_class,
                 equal_class=self.equal_class,
             )
-        elif isinstance(method, str):
-            raise ValueError(f"Unsupported sampling method {method}.")
-        elif callable(method):
-            scores = method(self)  # Custom sampling method
+        elif isinstance(config.sampling_method, str):
+            raise ValueError(f"Unsupported sampling method {config.sampling_method}.")
+        elif callable(config.sampling_method):
+            scores = config.sampling_method(self)  # Custom sampling method
         else:
             raise ValueError("Method must be a string or a callable.")
 
@@ -743,10 +813,7 @@ class Scores:
     def bootstrap_metric(
         self,
         metric: Union[str, Callable],
-        *,
-        nb_samples: int = 1000,
-        method: Union[str, Callable] = "replacement",
-        ratio: Optional[float] = None,
+        config: BootstrapConfig = DEFAULT_BOOTSTRAP_CONFIG,
     ) -> np.ndarray:
         """
         Calculates nb_samples samples of metric using bootstrapping.
@@ -756,10 +823,7 @@ class Scores:
                 or a callable with signature::
 
                     metric(sample: Scores) -> np.ndarray
-            nb_samples: Number of samples to return
-            method: Sampling method to create bootstrap sample. One of "replacement" or
-                "proportion".
-            ratio: Size of sample when using proportional sampling. In range (0, 1).
+            config: Bootstrap config.
 
         Returns:
             Array of samples from metric. If metric returns arrays of shape (X,), the
@@ -769,9 +833,9 @@ class Scores:
             metric = getattr(Scores, metric)
 
         m = np.asarray(metric(self))
-        res = np.empty(shape=(nb_samples, *m.shape), dtype=m.dtype)
-        for j in range(nb_samples):
-            sample = self.bootstrap_sample(method=method, ratio=ratio)
+        res = np.empty(shape=(config.nb_samples, *m.shape), dtype=m.dtype)
+        for j in range(config.nb_samples):
+            sample = self.bootstrap_sample(config=config)
             res[j] = metric(sample)
 
         return res
@@ -780,15 +844,11 @@ class Scores:
         self,
         metric: Union[str, Callable],
         alpha: float = 0.05,
-        *,
-        nb_samples: int = 1000,
-        bootstrap_method: str = "quantile",
-        sampling_method: Union[str, Callable] = "replacement",
-        ratio: Optional[float] = None,
+        config: BootstrapConfig = DEFAULT_BOOTSTRAP_CONFIG,
     ) -> np.ndarray:
         """
         Calculates the confidence interval with approximate coverage 1-alpha for metric
-        by bootstraping nb_samples from the positive and negative scores.
+        by bootstrapping nb_samples from the positive and negative scores.
 
         Args:
             metric: Can be a string indicating a member function of the Scores class
@@ -796,26 +856,7 @@ class Scores:
 
                     metric(sample: Scores) -> Union[float, np.ndarray]
             alpha: Significance level. In range (0, 1).
-            nb_samples: Number of samples to bootstrap
-            bootstrap_method: Method to compute the CI from the bootstrap samples.
-                Possible values are
-
-                * "quantile" uses the alpha/2 and 1-alpha/2 quantiles of the
-                  empirical metric distribution.
-                * "bc" applies bias correction to correct for the bias of the median
-                  of the empirical distribution
-                * "bca" applies bias correction and acceleration to correct for non-
-                  constant standard error.
-
-                See Ch. 11 of Computer Age Statistical Inference by Efron and Hastie
-                for details.
-            sampling_method: Sampling method to create bootstrap sample. One of
-                "replacement" or "proportion". Or a callable with signature::
-
-                    sampling_method(scores: Scores) -> Scores
-
-                generating one bootstrap sample from a given Scores object.
-            ratio: Size of sample when using proportional sampling. In range (0, 1).
+            config: Bootstrap config.
 
         Returns:
             Returns an array of shape (Y, 2) with lower and upper bounds of the CI, for
@@ -823,11 +864,12 @@ class Scores:
         """
         if isinstance(metric, str):
             metric = getattr(Scores, metric)
-        samples = self.bootstrap_metric(
-            metric, nb_samples=nb_samples, method=sampling_method, ratio=ratio
-        )  # (N, Y)
+        samples = self.bootstrap_metric(metric, config=config)  # (N, Y)
         ci = utils.bootstrap_ci(
-            theta=samples, theta_hat=metric(self), alpha=alpha, method=bootstrap_method
+            theta=samples,
+            theta_hat=metric(self),
+            alpha=alpha,
+            method=config.bootstrap_method,
         )
         return ci
 

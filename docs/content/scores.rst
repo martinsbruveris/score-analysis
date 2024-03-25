@@ -5,5 +5,7 @@ Scores
 
 .. autoenum:: BinaryLabel
 
+.. autoclass:: BootstrapConfig
+
 .. autoclass:: Scores
     :members:

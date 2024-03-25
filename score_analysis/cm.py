@@ -240,6 +240,23 @@ class ConfusionMatrix:
 
         return matrix, classes
 
+    def __eq__(self, other):
+        """
+        Tests if two ConfusionMatrix objects are equal. Equality is tested exactly,
+        rounding errors can lead to objects being not equal.
+
+        Args:
+            other: Object to test against.
+
+        Returns:
+            True, if objects are equal, false otherwise.
+        """
+        return (
+            np.array_equal(self, other)
+            and np.array_equal(self.classes, other.classes)
+            and self.binary == other.binary
+        )
+
     def __getitem__(self, item) -> ConfusionMatrix:
         """
         Returns confusion matrix at given index.
@@ -247,6 +264,12 @@ class ConfusionMatrix:
         return ConfusionMatrix(
             matrix=self.matrix[item], classes=self.classes, binary=self.binary
         )
+
+    def __array__(self) -> np.ndarray:
+        """
+        Returns numpy array of confusion matrix.
+        """
+        return self.matrix
 
     @property
     def nb_classes(self) -> int:

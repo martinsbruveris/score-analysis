@@ -1,5 +1,9 @@
 # Change Log
 
+## Unpublished
+
+- Add GroupScores object to enable by-group metric computation and bootstrapping.
+
 ## v0.2.0 - 2024-01-04
 
 - Changed the interface for bootstrap settings. All bootstrap settings are now combined

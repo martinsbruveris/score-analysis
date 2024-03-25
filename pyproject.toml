@@ -11,7 +11,7 @@ packages = [{include = "score_analysis"}]
 [[tool.poetry.source]]
 name = "onfido"
 url = "https://nexus.mgmt.onfido.xyz/repository/pypi/simple"
-priority = "default"
+priority = "primary"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.11"

@@ -1,6 +1,6 @@
 # Change Log
 
-## Unpublished
+## v0.2.1 - 2024-03-25
 
 - Add GroupScores object to enable by-group metric computation and bootstrapping.
 

@@ -80,7 +80,7 @@ def bootstrap_ci(
 
     if method == "quantile":
         alpha_joint = np.stack([alpha_lower, alpha_upper], axis=0)  # (2, Z')
-        ci = np.quantile(theta, q=alpha_joint, axis=0)  # (2, Z', Y)
+        ci = np.nanquantile(theta, q=alpha_joint, axis=0)  # (2, Z', Y)
         ci = np.moveaxis(ci, source=[0, 1], destination=[-1, -2])  # (Y, Z', 2)
         ci = np.reshape(ci, theta.shape[1:] + alpha_shape + (2,))  # (Y, Z, 2)
     elif method in {"bc", "bca"}:
@@ -97,7 +97,8 @@ def bootstrap_ci(
         metric_size = theta.shape[-1]
 
         # Proportion of samples less than theta_hat
-        p0 = np.sum(theta <= theta_hat, axis=0) / nb_samples  # (Y,)
+        nb_not_nan = np.sum(~np.isnan(theta), axis=0)
+        p0 = np.sum(theta <= theta_hat, axis=0) / nb_not_nan  # (Y,)
         # Inverse function of standard normal cdf. If p0=0.5, then z0=0 and this
         # method reduces to the quantile method.
         z0 = scipy.stats.norm.ppf(p0)
@@ -111,8 +112,8 @@ def bootstrap_ci(
             z_upper = 2 * z0 + z_alpha_upper
         else:  # bootstrap_method == "bca"
             # Estimate acceleration from data. See (11.40) in Efron, Hastie.
-            a_num = np.sum((theta - theta_hat) ** 3, axis=0)
-            a_den = 6 * np.sum((theta - theta_hat) ** 2, axis=0) ** 1.5
+            a_num = np.nansum((theta - theta_hat) ** 3, axis=0)
+            a_den = 6 * np.nansum((theta - theta_hat) ** 2, axis=0) ** 1.5
             # If a=0, the method reduces to the non-accelerated bias correction
             a = np.divide(a_num, a_den, out=np.zeros_like(a_num), where=a_den != 0)
             # See (11.39) in Efron, Hastie
@@ -129,7 +130,7 @@ def bootstrap_ci(
 
         ci = np.empty((metric_size, 2))
         for j in range(metric_size):
-            ci[j] = np.quantile(
+            ci[j] = np.nanquantile(
                 theta[:, j], q=[alpha_hat_lower[j], alpha_hat_upper[j]], axis=0
             )
         ci = np.reshape(ci, (*metric_shape, 2))
@@ -140,7 +141,7 @@ def bootstrap_ci(
 
 
 def invert_pl_function(x: np.ndarray, y: np.ndarray, t: np.ndarray) -> List[np.ndarray]:
-    """
+    r"""
     Inverts piecewise linear function.
 
     The points (x[i], y[i]) define the function is given by f(x[i]) = y[i] with
@@ -153,7 +154,7 @@ def invert_pl_function(x: np.ndarray, y: np.ndarray, t: np.ndarray) -> List[np.n
     as t, not an array.
 
     If the equation f(z) = t[j] has no solution, we return the closest point s[j],
-    i.e., |f(s[j]) - t[j]| = min_z |f(z) - t[j]|. We always return only one solution
+    i.e., \|f(s[j]) - t[j]\| = min_z \|f(z) - t[j]\|. We always return only one solution
     in this case.
 
     Args:

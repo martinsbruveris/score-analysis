@@ -414,7 +414,7 @@ def test_find_root_invalid_input():
         Scores._find_root(lambda _: 1.0, 0.0, 1.0, True)
 
 
-@pytest.mark.parametrize("stratified_sampling", [True, False])
+@pytest.mark.parametrize("stratified_sampling", ["by_label", None])
 @pytest.mark.parametrize("smoothing", [True, False])
 def test_bootstrap_sample_replacement(stratified_sampling, smoothing):
     """Tests the basic mechanics of replacement sampling, with various parameters."""
@@ -451,7 +451,7 @@ def test_bootstrap_sample_hard_samples(nb_pos, nb_neg, nb_hard_pos, nb_hard_neg)
 
     # We repeat sampling several times, because it is random, and we want to catch
     # edge cases, where some samples contain no positives or negatives.
-    config = BootstrapConfig(sampling_method="replacement", stratified_sampling=False)
+    config = BootstrapConfig(sampling_method="replacement", stratified_sampling=None)
     for _ in range(100):
         sample = scores.bootstrap_sample(config)
         # If the original scores had at least one hard sample, then the bootstrap sample
@@ -465,7 +465,9 @@ def test_bootstrap_sample_hard_samples(nb_pos, nb_neg, nb_hard_pos, nb_hard_neg)
 def test_bootstrap_sample_stratified():
     """Tests that stratified sampling preserves the number of pos and neg scores."""
     scores = Scores(pos=[1, 2, 3, 4], neg=[1, 2], score_class="neg", equal_class="neg")
-    config = BootstrapConfig(sampling_method="replacement", stratified_sampling=True)
+    config = BootstrapConfig(
+        sampling_method="replacement", stratified_sampling="by_label"
+    )
     sample = scores.bootstrap_sample(config=config)
 
     assert sample.nb_hard_pos == scores.nb_hard_pos
@@ -512,7 +514,8 @@ def test_bootstrap_sample_callable():
 def test_bootstrap_metric(metric, nb_samples):
     scores = Scores(pos=[1, 2, 3, 4], neg=[1, 2, 3])
     samples = scores.bootstrap_metric(
-        metric, config=BootstrapConfig(nb_samples=nb_samples, stratified_sampling=True)
+        metric,
+        config=BootstrapConfig(nb_samples=nb_samples, stratified_sampling="by_label"),
     )
     assert samples.shape == (nb_samples, 2)
 
@@ -524,7 +527,9 @@ def test_bootstrap_ci_identity():
     ci = scores.bootstrap_ci(
         metric="eer",
         config=BootstrapConfig(
-            nb_samples=nb_samples, sampling_method=lambda x: x, stratified_sampling=True
+            nb_samples=nb_samples,
+            sampling_method=lambda x: x,
+            stratified_sampling="by_label",
         ),
     )
     eer = scores.eer()
@@ -540,13 +545,26 @@ def test_bootstrap_ci_identity():
 
 
 @pytest.mark.parametrize("bootstrap_method", ["quantile", "bc", "bca"])
-def test_bootstrap_ci_gaussian(bootstrap_method):
+@pytest.mark.parametrize("with_nans", [False, True])
+def test_bootstrap_ci_gaussian(bootstrap_method, with_nans):
     rng = np.random.default_rng(seed=42)
+
+    def metric(s: Scores):
+        # We return a NaN 5% of time, but only if the scores object is not "marked".
+        if with_nans and not hasattr(s, "is_theta_hat") and rng.random() < 0.05:
+            return np.nan
+        else:
+            return np.mean(s.pos)
+
     nb_inside = 0
     for j in range(100):
         scores = Scores(pos=rng.normal(size=100), neg=[])
+        # We mark the "original" score object to ensure that the metric computation
+        # on it is always finite.
+        scores.is_theta_hat = True
+
         ci = scores.bootstrap_ci(
-            metric=lambda s: np.mean(s.pos),
+            metric=metric,
             config=BootstrapConfig(
                 bootstrap_method=bootstrap_method,
                 # We use a custom sampling method to make the test deterministic by

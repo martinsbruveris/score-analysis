@@ -22,49 +22,64 @@ class BinaryLabel(Enum):
 
 SamplingMethod = Callable[["Scores"], "Scores"]
 
+# TODO (martins): Fast bootstrap, say "single_pass". Calculate for each element, how
+#   often it should be selected.
+# TODO (martins): group2idx, so we can use integers for group indices. Should speed up
+#   bootstrapping.
+# TODO (martins): Add ids field, so we can quickly export ids with scores closes to
+#   threshold. Idea is to make error-analysis more user-friendly.
+
 
 @dataclass(frozen=True)
 class BootstrapConfig:
     """
     Bootstrap configuration for creating bootstrap samples and computing CIs.
 
-    Params:
+    Args:
         nb_samples: Number of samples to use for bootstrapping.
         bootstrap_method: Method to compute the CI from the bootstrap samples.
             Possible values are
 
-            * "quantile" uses the alpha/2 and 1-alpha/2 quantiles of the
-              empirical metric distribution.
-            * "bc" applies bias correction to correct for the bias of the median
-              of the empirical distribution
-            * "bca" applies bias correction and acceleration to correct for non-
-              constant standard error.
+             * "quantile" uses the alpha/2 and 1-alpha/2 quantiles of the
+               empirical metric distribution.
+             * "bc" applies bias correction to correct for the bias of the median
+               of the empirical distribution
+             * "bca" applies bias correction and acceleration to correct for non-
+               constant standard error.
 
             See Ch. 11 of Computer Age Statistical Inference by Efron and Hastie
             for details.
         sampling_method: Sampling method to create bootstrap sample. Supported methods
             are
 
-            * "replacement" creates a sample with the same number of positive and
-              negative scores using sampling with replacement.
-            * "proportion" creates a sample of size defined by ratio using sampling
-              without replacement. This is similar to cross-validation, where a
-              proportion of data is used in each iteration.
-            * A callable with signature::
+             * "replacement" creates a sample with the same number of positive and
+               negative scores using sampling with replacement.
+             * "proportion" creates a sample of size defined by ratio using sampling
+               without replacement. This is similar to cross-validation, where a
+               proportion of data is used in each iteration.
+             * A callable with signature::
 
-                method(source: Scores) -> Scores
+                  method(source: Scores, **kwargs) -> Scores
 
-              creating one sample from a source Scores object.
+               creating one sample from a source Scores object.
 
-        stratified_sampling: TBA
-        smoothing: TBA
+        stratified_sampling: Stratified sampling is only supported for replacement
+            sampling. Possible values are
+
+             * ``None``. No stratification is used
+             * "by_label". Sampling preserves the proportion of positive and negative
+               samples as well as the proportion of easy positive and negative samples.
+             * "by_group". Sampling preserves the proportion of samples in each group.
+               Defaults to non-stratified sampling, if no groups are present.
+
+        smoothing: Optional smoothing of sampled scores.
         ratio: Size of sample when using proportional sampling. In range (0, 1).
     """
 
     nb_samples: int = 1_000
     bootstrap_method: str = "bca"
     sampling_method: Union[str, SamplingMethod] = "replacement"
-    stratified_sampling: bool = False
+    stratified_sampling: Optional[str] = None
     smoothing: bool = False
     ratio: Optional[float] = None
 
@@ -82,11 +97,12 @@ class Scores:
         nb_easy_neg: int = 0,
         score_class: Union[BinaryLabel, str] = "pos",
         equal_class: Union[BinaryLabel, str] = "pos",
+        is_sorted: bool = False,
     ):
         """
         Args:
-            pos: Scores for positive samples
-            neg: Scores for negative samples
+            pos: Scores for positive samples.
+            neg: Scores for negative samples.
             nb_easy_pos: Number of positive samples that we assume are always correctly
                 classified when computing metrics. These parameters when evaluating
                 a highly accurate classifier on only the hardest samples to speed up
@@ -97,6 +113,8 @@ class Scores:
                 class?
             equal_class: Do samples with score equal to the threshold get assigned to
                 the positive or negative class?
+            is_sorted: If True, we assume the scores are already sorted. Can be used to
+                speed up Scores object creation.
         """
         self.pos = np.asarray(pos)
         self.neg = np.asarray(neg)
@@ -105,8 +123,9 @@ class Scores:
         self.score_class = BinaryLabel(score_class)
         self.equal_class = BinaryLabel(equal_class)
 
-        self.pos = np.sort(self.pos)
-        self.neg = np.sort(self.neg)
+        if not is_sorted:
+            self.pos = np.sort(self.pos)
+            self.neg = np.sort(self.neg)
 
     @property
     def hard_pos_ratio(self) -> float:
@@ -182,11 +201,12 @@ class Scores:
         nb_easy_neg: int = 0,
         score_class: Union[BinaryLabel, str] = "pos",
         equal_class: Union[BinaryLabel, str] = "pos",
+        is_sorted: bool = False,
     ) -> Scores:
         """
         Args:
-            labels: Array with sample labels
-            scores: Array with sample scores
+            labels: Array with sample labels.
+            scores: Array with sample scores.
             pos_label: The label of the positive class. All other labels are treated as
                 negative labels.
             nb_easy_pos: Number of positive samples that we assume are always correctly
@@ -199,6 +219,8 @@ class Scores:
                 class?
             equal_class: Do samples with score equal to the threshold get assigned to
                 the positive or negative class?
+            is_sorted: If True, we assume the scores are already sorted. Can be used to
+                speed up Scores object creation.
 
         Returns:
             A Scores instance.
@@ -214,6 +236,7 @@ class Scores:
             nb_easy_neg=nb_easy_neg,
             score_class=score_class,
             equal_class=equal_class,
+            is_sorted=is_sorted,
         )
 
     def __eq__(self, other: Scores) -> bool:
@@ -252,6 +275,7 @@ class Scores:
             nb_easy_neg=self.nb_easy_pos,
             score_class="neg" if self.score_class == BinaryLabel.pos else "pos",
             equal_class="neg" if self.equal_class == BinaryLabel.pos else "pos",
+            is_sorted=True,
         )
 
     def cm(self, threshold) -> ConfusionMatrix:
@@ -578,7 +602,7 @@ class Scores:
         points: Optional[Union[int, np.ndarray]] = None,
     ):
         """
-        General function for setting thresholds at abritrary metrics. No assumption is
+        General function for setting thresholds at arbitrary metrics. No assumption is
         made about the metric being monotone or the threshold being unique.
 
         Given a metric function and a target value, the function will find all values
@@ -605,7 +629,7 @@ class Scores:
             equation metric(theta) = target[j].
         """
         if isinstance(metric, str):
-            metric = getattr(Scores, metric)
+            metric = getattr(type(self), metric)
 
         if points is None:
             points = np.sort(np.concatenate([self.pos, self.neg]))
@@ -623,7 +647,6 @@ class Scores:
             if min_score >= max_score:
                 raise ValueError("At least two values are required to set thresholds.")
             points = np.linspace(min_score, max_score, points, endpoint=True)
-            print(points)
 
         threshold = utils.invert_pl_function(x=points, y=metric(self, points), t=target)
         return threshold
@@ -705,6 +728,52 @@ class Scores:
 
         return (xa + xe) / 2
 
+    def _sample_indices(self, by_label: bool = False):
+        """
+        Returns the indices of positive and negative scores that we would include in
+        the bootstrap sample.
+        """
+        if by_label:
+            # Stratified sampling does not change easy : hard and pos : neg ratios.
+            nb_easy_pos = self.nb_easy_pos
+            nb_easy_neg = self.nb_easy_neg
+            nb_hard_pos = self.nb_hard_pos
+            nb_hard_neg = self.nb_hard_neg
+        else:
+            # Non-stratified sampling also takes into account uncertainty about the
+            # pos : neg ratio in the bootstrapped sample.
+            p = (
+                self.nb_all_pos / self.nb_all_samples
+                if self.nb_all_samples > 0
+                else 0.0
+            )
+            nb_pos = np.random.binomial(self.nb_all_samples, p)
+            nb_neg = self.nb_all_samples - nb_pos
+
+            # Try to have at least one positive and one negative sample.
+            if nb_pos == 0 and self.nb_all_pos > 0:
+                nb_pos, nb_neg = 1, self.nb_all_samples - 1
+            if nb_neg == 0 and self.nb_all_neg > 0:
+                nb_pos, nb_neg = self.nb_all_samples - 1, 1
+
+            # Find out how many easy and hard samples there will be.
+            nb_easy_pos = np.random.binomial(nb_pos, self.easy_pos_ratio)
+            nb_easy_neg = np.random.binomial(nb_neg, self.easy_neg_ratio)
+            nb_hard_pos = nb_pos - nb_easy_pos
+            nb_hard_neg = nb_neg - nb_easy_neg
+
+            # Try to have at least one hard positive and negative sample.
+            if nb_hard_pos == 0 and self.nb_hard_pos > 0:
+                nb_hard_pos, nb_easy_pos = 1, nb_pos - 1
+            if nb_hard_neg == 0 and self.nb_hard_neg > 0:
+                nb_hard_neg, nb_easy_neg = 1, nb_neg - 1
+
+        # Sampling hard samples with replacement
+        pos_idx = np.random.choice(self.nb_hard_pos, size=nb_hard_pos, replace=True)
+        neg_idx = np.random.choice(self.nb_hard_neg, size=nb_hard_neg, replace=True)
+
+        return pos_idx, neg_idx, nb_easy_pos, nb_easy_neg
+
     def bootstrap_sample(
         self,
         config: BootstrapConfig = DEFAULT_BOOTSTRAP_CONFIG,
@@ -719,44 +788,12 @@ class Scores:
             Scores object with the sampled scores.
         """
         if config.sampling_method == "replacement":
-            if config.stratified_sampling:
-                # Stratified sampling does not change easy : hard and pos : neg ratios.
-                nb_easy_pos = self.nb_easy_pos
-                nb_easy_neg = self.nb_easy_neg
-                nb_hard_pos = self.nb_hard_pos
-                nb_hard_neg = self.nb_hard_neg
-            else:
-                # Non-stratified sampling also takes into account uncertainty about the
-                # pos : neg ratio in the bootstrapped sample.
-                p = (
-                    self.nb_all_pos / self.nb_all_samples
-                    if self.nb_all_samples > 0
-                    else 0.0
-                )
-                nb_pos = np.random.binomial(self.nb_all_samples, p)
-                nb_neg = self.nb_all_samples - nb_pos
+            pos_idx, neg_idx, nb_easy_pos, nb_easy_neg = self._sample_indices(
+                by_label=config.stratified_sampling == "by_label"
+            )
 
-                # Try to have at least one positive and one negative sample.
-                if nb_pos == 0 and self.nb_all_pos > 0:
-                    nb_pos, nb_neg = 1, self.nb_all_samples - 1
-                if nb_neg == 0 and self.nb_all_neg > 0:
-                    nb_pos, nb_neg = self.nb_all_samples - 1, 1
-
-                # Find out how many easy and hard samples there will be.
-                nb_easy_pos = np.random.binomial(nb_pos, self.easy_pos_ratio)
-                nb_easy_neg = np.random.binomial(nb_neg, self.easy_neg_ratio)
-                nb_hard_pos = nb_pos - nb_easy_pos
-                nb_hard_neg = nb_neg - nb_easy_neg
-
-                # Try to have at least one hard positive and negative sample.
-                if nb_hard_pos == 0 and self.nb_hard_pos > 0:
-                    nb_hard_pos, nb_easy_pos = 1, nb_pos - 1
-                if nb_hard_neg == 0 and self.nb_hard_neg > 0:
-                    nb_hard_neg, nb_easy_neg = 1, nb_neg - 1
-
-            # Sampling hard samples with replacement
-            pos = np.random.choice(self.pos, size=nb_hard_pos, replace=True)
-            neg = np.random.choice(self.neg, size=nb_hard_neg, replace=True)
+            pos = self.pos[pos_idx]
+            neg = self.neg[neg_idx]
 
             if config.smoothing:
 
@@ -806,7 +843,7 @@ class Scores:
         elif callable(config.sampling_method):
             scores = config.sampling_method(self)  # Custom sampling method
         else:
-            raise ValueError("Method must be a string or a callable.")
+            raise ValueError("Sampling method must be a string or a callable.")
 
         return scores
 
@@ -814,6 +851,7 @@ class Scores:
         self,
         metric: Union[str, Callable],
         config: BootstrapConfig = DEFAULT_BOOTSTRAP_CONFIG,
+        **kwargs,
     ) -> np.ndarray:
         """
         Calculates nb_samples samples of metric using bootstrapping.
@@ -822,21 +860,22 @@ class Scores:
             metric: Can be a string indicating a member function of the Scores class
                 or a callable with signature::
 
-                    metric(sample: Scores) -> np.ndarray
+                    metric(sample: Scores, **kwargs) -> np.ndarray
             config: Bootstrap config.
+            **kwargs: Arguments that are passed to the metric function.
 
         Returns:
             Array of samples from metric. If metric returns arrays of shape (X,), the
             function will return an array of shape (nb_samples, X).
         """
         if isinstance(metric, str):
-            metric = getattr(Scores, metric)
+            metric = getattr(type(self), metric)
 
-        m = np.asarray(metric(self))
+        m = np.asarray(metric(self, **kwargs))
         res = np.empty(shape=(config.nb_samples, *m.shape), dtype=m.dtype)
         for j in range(config.nb_samples):
             sample = self.bootstrap_sample(config=config)
-            res[j] = metric(sample)
+            res[j] = metric(sample, **kwargs)
 
         return res
 
@@ -845,6 +884,7 @@ class Scores:
         metric: Union[str, Callable],
         alpha: float = 0.05,
         config: BootstrapConfig = DEFAULT_BOOTSTRAP_CONFIG,
+        **kwargs,
     ) -> np.ndarray:
         """
         Calculates the confidence interval with approximate coverage 1-alpha for metric
@@ -854,20 +894,21 @@ class Scores:
             metric: Can be a string indicating a member function of the Scores class
                 or a callable with signature::
 
-                    metric(sample: Scores) -> Union[float, np.ndarray]
+                    metric(sample: Scores, **kwargs) -> Union[float, np.ndarray]
             alpha: Significance level. In range (0, 1).
             config: Bootstrap config.
+            **kwargs: Arguments that are passed to the metric function.
 
         Returns:
             Returns an array of shape (Y, 2) with lower and upper bounds of the CI, for
             a metric returning shape (Y,).
         """
         if isinstance(metric, str):
-            metric = getattr(Scores, metric)
-        samples = self.bootstrap_metric(metric, config=config)  # (N, Y)
+            metric = getattr(type(self), metric)
+        samples = self.bootstrap_metric(metric, config=config, **kwargs)  # (N, Y)
         ci = utils.bootstrap_ci(
             theta=samples,
-            theta_hat=metric(self),
+            theta_hat=metric(self, **kwargs),
             alpha=alpha,
             method=config.bootstrap_method,
         )

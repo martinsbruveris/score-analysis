@@ -230,6 +230,7 @@ consistent handling of matrix shapes.
    :caption: Score Analysis
 
    content/cm
+   content/group_scores
    content/scores
    content/metrics
    content/tools

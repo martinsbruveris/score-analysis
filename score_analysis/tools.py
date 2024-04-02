@@ -7,11 +7,20 @@ module.
 """
 
 import math
-from typing import Optional, Tuple
+from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 
 from .scores import DEFAULT_BOOTSTRAP_CONFIG, BootstrapConfig, Scores
+
+
+@dataclass
+class ROCCurve:
+    fnr: np.ndarray
+    fpr: np.ndarray
+    fnr_ci: Optional[np.ndarray] = None
+    fpr_ci: Optional[np.ndarray] = None
 
 
 def roc(
@@ -21,7 +30,7 @@ def roc(
     fpr: Optional[np.ndarray] = None,
     thresholds: Optional[np.ndarray] = None,
     nb_points: int = 100,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> ROCCurve:
     """Compute the ROC curve at the given FNR, FPR or threshold values."""
     if thresholds is None:
         thresholds = np.zeros(shape=(0,))
@@ -44,7 +53,7 @@ def roc(
     fnr = scores.fnr(thresholds)
     fpr = scores.fpr(thresholds)
 
-    return fnr, fpr
+    return ROCCurve(fnr=fnr, fpr=fpr)
 
 
 def roc_with_ci(
@@ -56,7 +65,7 @@ def roc_with_ci(
     nb_points: Optional[int] = None,
     alpha: float = 0.05,
     config: BootstrapConfig = DEFAULT_BOOTSTRAP_CONFIG,
-):
+) -> ROCCurve:
     """
     Function to compute the confidence band around a ROC curve.
 
@@ -79,8 +88,8 @@ def roc_with_ci(
         config: Bootstrap config.
 
     Returns:
-        (fnr, fpr, fnr_ci, fpr_ci): The point values for the ROC curve and the lower
-        and upper bounds of the confidence band values for both metric values.
+        ROCCurve object with point values for the ROC curve and the lower and upper
+        bounds of the confidence band values for both metric values.
     """
     thresholds = _find_support_thresholds(
         scores=scores, fnr=fnr, fpr=fpr, thresholds=thresholds, nb_points=nb_points
@@ -106,7 +115,7 @@ def roc_with_ci(
     fpr_band = _aggregate_rectangles(fnr, fnr_ci, fpr_ci)
     fnr_band = _aggregate_rectangles(fpr, fpr_ci, fnr_ci)
 
-    return fnr, fpr, fnr_band, fpr_band
+    return ROCCurve(fnr=fnr, fpr=fpr, fnr_ci=fnr_band, fpr_ci=fpr_band)
 
 
 def _find_support_thresholds(

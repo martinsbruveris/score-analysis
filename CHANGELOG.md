@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.2.2 - 2024-04-05
+
+- Add showbias functionality to calculate bias metrics for specific groups in a dataset.
+
 ## v0.2.1 - 2024-03-25
 
 - Add GroupScores object to enable by-group metric computation and bootstrapping.

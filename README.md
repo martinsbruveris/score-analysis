@@ -213,6 +213,156 @@ consistent handling of matrix shapes.
 - Whenever a result is a scalar, we return it as such. This is, e.g., the case when
   computing scalar metrics of single confusion matrices, i.e., X=Y=().
 
+### Showbias
+The `showbias` function can be used to measure how a user-specified metric differs
+across groups of data. Typically, we would be interested in knowing how, for example,
+FRR differs across different ethnicities, which would help us to understand if our
+product is biased and performs better for some ethnicities than for others. However, the
+function should be general enough to allow you to measure any variations in a metric
+across different groups: You could, for example, use it to measure accuracy across
+different document types or flagging rates across different SDK platforms. You could
+even measure how Dogfido's FRR differs across different dog breeds:
+
+![image info](images/showbias.png)
+
+In its simplest case, the `showbias` function assumes that you have a pandas dataframe
+with three columns:
+- A `group` column that indicates group membership for every row, e.g.
+  `female` and `male` values in a column called `gender`
+- A `scores` column that contains the predicted scores (e.g. by a model)
+- A `labels` column that contains the ground truth using integers
+
+Imagine that you have a dataframe `df` that contains model predictions and
+ground truth labels along with gender data.
+```python
+import pandas as pd
+import numpy as np
+
+df = pd.DataFrame({
+    'gender': np.random.choice(['female', 'male'], size=1000),
+    'labels': np.random.choice([0, 1], size=1000),
+    'scores': np.random.uniform(0.0, 1.0, 1000)
+})
+```
+
+You can then just run the following to measure FRR per gender:
+```python
+from score_analysis import showbias
+
+bias_frame = showbias(
+    data=df,
+    group_columns="gender",
+    label_column="labels",
+    score_column="scores",
+    metric="fnr",
+    threshold=[0.5]
+)
+print(bias_frame.to_markdown())
+```
+which should result in a table like this:
+| gender   |   0.5 |
+|:---------|------:|
+| female   | 0.508 |
+| male     | 0.474 |
+
+Above, we have been passing a threshold of `0.5` (as also indicated by the column name).
+You can pass several thresholds all at once, like so:
+```python
+bias_frame = showbias(
+    data=df,
+    group_columns="gender",
+    label_column="labels",
+    score_column="scores",
+    metric="fnr",
+    threshold=[0.3, 0.5, 0.7]
+)
+print(bias_frame.to_markdown())
+```
+which will result in several columns, one for every threshold:
+| gender   |   0.3 |   0.5 |   0.7 |
+|:---------|------:|------:|------:|
+| female   | 0.311 | 0.508 | 0.705 |
+| male     | 0.252 | 0.474 | 0.697 |
+
+You can obtain metrics that are normalised. For example, you can normalise to the metric
+measured across the entire dataset by passing `normalise="by_overall"` argument, like so:
+```python
+bias_frame = showbias(
+    data=df,
+    group_columns="gender",
+    label_column="labels",
+    score_column="scores",
+    metric="fnr",
+    threshold=[0.5],
+    normalise="by_overall"
+)
+```
+
+You can obtain confidence intervals by setting the `nb_samples` in the `BootstrapConfig`
+to a value greater than `0`:
+```python
+from score_analysis import BootstrapConfig
+
+bias_frame = showbias(
+    data=df,
+    group_columns="gender",
+    label_column="labels",
+    score_column="scores",
+    metric="fnr",
+    threshold=[0.5],
+    bootstrap_config=BootstrapConfig(
+        nb_samples=500,
+        stratified_sampling="by_group"
+    ),
+    alpha_level=0.05
+)
+print(bias_frame.to_markdown())
+```
+In this case, `bias_frame` will have 4 properties:
+- `bias_frame.values` contains the observed values
+- `bias_frame.alpha` contains the alpha level
+- `bias_frame.lower` contains lower bound of the CI
+- `bias_frame.upper` contains upper bound of the CI
+
+Imagine that you didn't only collect gender data in `df` but also age group data.
+```python
+import pandas as pd
+import numpy as np
+
+df = pd.DataFrame({
+    'gender': np.random.choice(['female', 'male'], size=1000),
+    'age_group': np.random.choice(['<25', '25-35', '35-45', '45-55', '>55'], size=1000),
+    'labels': np.random.choice([0, 1], size=1000),
+    'scores': np.random.uniform(0.0, 1.0, 1000)
+})
+```
+
+You can then just run the following to measure FRR per gender x age group combination:
+```python
+bias_frame = showbias(
+    data=df,
+    group_columns=["gender", "age_group"],
+    label_column="labels",
+    score_column="scores",
+    metric="fnr",
+    threshold=[0.5]
+)
+print(bias_frame.to_markdown(reset_display_index=True))
+```
+which should result in a table like this:
+| gender   | age_group   |   0.5 |
+|:---------|:------------|------:|
+| female   | 25-35       | 0.514 |
+| female   | 35-45       | 0.571 |
+| female   | 45-55       | 0.52  |
+| female   | <25         | 0.517 |
+| female   | >55         | 0.509 |
+| male     | 25-35       | 0.525 |
+| male     | 35-45       | 0.435 |
+| male     | 45-55       | 0.414 |
+| male     | <25         | 0.529 |
+| male     | >55         | 0.562 |
+
 ## Contributing
 
 Before submitting an MR, please run

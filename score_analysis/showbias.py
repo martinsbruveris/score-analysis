@@ -143,11 +143,7 @@ def showbias(
     score_object = GroupScores.from_labels(
         scores=data[score_column].values,
         labels=data[label_column].values,
-        groups=(
-            data[group_column].values
-            if isinstance(group_columns, list)
-            else data[group_columns].values
-        ),
+        groups=data[group_column].values,
         pos_label=pos_label,
         score_class=score_class,
         equal_class=equal_class,

@@ -285,3 +285,22 @@ def test_invalid_normalize_input():
             score_column="score",
             normalize="unsupported",
         )
+
+
+def test_invalid_group_column_type():
+    data = pd.DataFrame(
+        {
+            5: ["A", "A", "B", "B"],
+            "score": [0.8, 0.6, 0.4, 0.2],
+            "label": [1, 1, 1, 1],
+        }
+    )
+    with pytest.raises(TypeError):
+        showbias(
+            data,
+            metric="fnr",
+            threshold=[0.5],
+            group_columns=5,
+            label_column="label",
+            score_column="score",
+        )

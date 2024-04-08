@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.2.3 - 2024-04-08
+
+- Fixes to the showbias tutorial notebook and increase of test coverage for showbias to 100%.
+
 ## v0.2.2 - 2024-04-05
 
 - Add showbias functionality to calculate bias metrics for specific groups in a dataset.

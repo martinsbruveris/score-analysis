@@ -1,8 +1,12 @@
 # Change Log
 
+## Unpublished
+
+- Introduced dataclass `ROCCurve` for return values of `roc` and `roc_with_ci`.
+
 ## v0.2.3 - 2024-04-08
 
-- Fixes to the showbias tutorial notebook and increase of test coverage for showbias to 100%.
+- Fixes to the showbias tutorial notebook and increases showbias test coverage.
 
 ## v0.2.2 - 2024-04-05
 

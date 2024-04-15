@@ -129,10 +129,9 @@ def showbias(
     _validate_column_inputs(data, group_columns, label_column, score_column)
 
     if isinstance(group_columns, str):
-        group_column = group_columns
+        groups = data[group_columns]
     elif isinstance(group_columns, Iterable):
-        group_column = "_".join(group_columns)
-        data[group_column] = data.apply(
+        groups = data.apply(
             lambda row: "_".join(row[col] for col in group_columns), axis=1
         )
     else:
@@ -143,7 +142,7 @@ def showbias(
     score_object = GroupScores.from_labels(
         scores=data[score_column].values,
         labels=data[label_column].values,
-        groups=data[group_column].values,
+        groups=groups.values,
         pos_label=pos_label,
         score_class=score_class,
         equal_class=equal_class,

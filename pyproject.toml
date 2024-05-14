@@ -12,7 +12,7 @@ readme = "README.md"
 packages = [{include = "score_analysis"}]
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.13"
+python = ">=3.9,<3.13"
 numpy = "*"
 pandas = "*"
 scipy = "*"

@@ -17,22 +17,22 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout
       with:
         fetch-depth: 1
 
     - name: Set up Python ${{ matrix.python }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python
       with:
         python-version: ${{ matrix.python }}
 
     - name: Install poetry
-      uses: abatilo/actions-poetry@v2.0.0
+      uses: abatilo/actions-poetry
       with:
         poetry-version: ${{ matrix.poetry }}
 
     - name: Cache poetry environment
-      uses: actions/cache@v2.1.6
+      uses: actions/cache
       id: cache
       with:
         path: ~/.virtualenvs

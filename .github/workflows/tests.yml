@@ -50,4 +50,4 @@ jobs:
       if: steps.cache.outputs.cache-hit != 'true'
 
     - name: Run tests
-      run: make test
+      run: poetry run pytest -sv tests

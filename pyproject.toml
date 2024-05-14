@@ -55,7 +55,7 @@ jupyter = ["jupyter", "matplotlib", "seaborn", "tqdm"]
 [tool.taskipy.tasks]
 bumpversion = "poetry run bumpversion patch && git push && git push --tags"
 docs-build = "sphinx-build docs docs/_build/html"
-docs-server = "sphinx-autobuild docs docs/_build/html --open-browser --watch=onfido_pipelines/"
+docs-server = "sphinx-autobuild docs docs/_build/html --open-browser --watch=score_analysis/"
 
 [tool.black]
 line-length = 88

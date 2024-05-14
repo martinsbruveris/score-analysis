@@ -57,6 +57,9 @@ def test_getitem():
     assert scores[0] == scores_0
     assert scores[1] == scores_1
 
+    with pytest.raises(ValueError):
+        scores["no_such_group"]
+
 
 def test_group_cm():
     scores = GroupScores(
@@ -66,6 +69,32 @@ def test_group_cm():
 
     assert cm[0] == scores[0].cm(3.4)
     assert cm[1] == scores[1].cm(3.4)
+
+
+@pytest.mark.parametrize(
+    "metric",
+    # fmt: off
+    [
+        "tpr", "fnr", "tnr", "fpr",
+        "topr", "tonr",
+        "tar", "frr", "trr", "far",
+        "acceptance_rate", "rejection_rate",
+    ]
+    # fmr: on
+)
+def test_group_metrics(metric):
+    scores = GroupScores(
+        pos=[1, 3, 5], neg=[2, 3], pos_groups=[0, 1, 0], neg_groups=[1, 0]
+    )
+    threshold = 2.2
+    group = 0
+
+    # We check that the two calls return the same result
+    #  - scores.group_tpr(threshold)[0] and
+    #  - scores[0].tpr(threshold)
+    res_1 = getattr(scores, "group_" + metric)(threshold)[group]
+    res_2 = getattr(scores[group], metric)(threshold)
+    assert res_1 == res_2
 
 
 def test_bootstrap_sample_non_stratified():

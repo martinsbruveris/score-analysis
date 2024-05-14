@@ -20,14 +20,13 @@ class BinaryLabel(Enum):
     neg = "neg"
 
 
-SamplingMethod = Callable[["Scores"], "Scores"]
+SAMPLING_METHOD_REPLACEMENT = "replacement"
+SAMPLING_METHOD_SINGLE_PASS = "single_pass"
+SAMPLING_METHOD_DYNAMIC = "dynamic"
+SAMPLING_METHOD_PROPORTION = "proportion"
 
-# TODO (martins): Fast bootstrap, say "single_pass". Calculate for each element, how
-#   often it should be selected.
-# TODO (martins): group2idx, so we can use integers for group indices. Should speed up
-#   bootstrapping.
-# TODO (martins): Add ids field, so we can quickly export ids with scores closes to
-#   threshold. Idea is to make error-analysis more user-friendly.
+CustomSamplingMethod = Callable[["Scores"], "Scores"]
+SamplingMethod = Union[str, CustomSamplingMethod]
 
 
 @dataclass(frozen=True)
@@ -54,6 +53,18 @@ class BootstrapConfig:
 
              * "replacement" creates a sample with the same number of positive and
                negative scores using sampling with replacement.
+             * "single_pass" approximates replacement sampling using a Poisson
+                distribution to determine how often each score would be selected in
+                the bootstrap sample. This speeds up sampling by up to ~40% compared to
+                replacement sampling since the sampled scores are already sorted.
+                However, the method cannot guarantee that each bootstrap sample has the
+                same number of scores. This should not matter if the number of scores
+                is >100 (per group, if stratified sampling is used).
+             * "dynamic" chooses between replacement and single pass sampling. It
+                chooses single pass sampling, if >100 scores are present per group and
+                smoothing is disabled and reverts to replacement sampling otherwise.
+                The threshold can be changed by setting the variable
+                ``SINGLE_PASS_SAMPLE_THRESHOLD``.
              * "proportion" creates a sample of size defined by ratio using sampling
                without replacement. This is similar to cross-validation, where a
                proportion of data is used in each iteration.
@@ -78,12 +89,13 @@ class BootstrapConfig:
 
     nb_samples: int = 1_000
     bootstrap_method: str = "bca"
-    sampling_method: Union[str, SamplingMethod] = "replacement"
+    sampling_method: SamplingMethod = SAMPLING_METHOD_DYNAMIC
     stratified_sampling: Optional[str] = None
     smoothing: bool = False
     ratio: Optional[float] = None
 
 
+SINGLE_PASS_SAMPLE_THRESHOLD = 100
 DEFAULT_BOOTSTRAP_CONFIG = BootstrapConfig()
 
 
@@ -728,7 +740,25 @@ class Scores:
 
         return (xa + xe) / 2
 
-    def _sample_indices(self, by_label: bool = False):
+    def _sampling_method(self, config: BootstrapConfig) -> SamplingMethod:
+        """
+        If sampling method is "dynamic", we select the appropriate method between
+        replacement and single pass, depending on the number of scores and whether
+        smoothing is enabled.
+        """
+        if config.sampling_method != SAMPLING_METHOD_DYNAMIC:
+            return config.sampling_method  # Nothing to choose here.
+
+        if (
+            self.nb_hard_pos < SINGLE_PASS_SAMPLE_THRESHOLD
+            or self.nb_hard_neg < SINGLE_PASS_SAMPLE_THRESHOLD
+            or config.smoothing
+        ):
+            return SAMPLING_METHOD_REPLACEMENT
+        else:
+            return SAMPLING_METHOD_SINGLE_PASS
+
+    def _sample_indices(self, by_label: bool = False, single_pass: bool = False):
         """
         Returns the indices of positive and negative scores that we would include in
         the bootstrap sample.
@@ -742,12 +772,12 @@ class Scores:
         else:
             # Non-stratified sampling also takes into account uncertainty about the
             # pos : neg ratio in the bootstrapped sample.
-            p = (
+            pos_neg_ratio = (
                 self.nb_all_pos / self.nb_all_samples
                 if self.nb_all_samples > 0
                 else 0.0
             )
-            nb_pos = np.random.binomial(self.nb_all_samples, p)
+            nb_pos = np.random.binomial(self.nb_all_samples, pos_neg_ratio)
             nb_neg = self.nb_all_samples - nb_pos
 
             # Try to have at least one positive and one negative sample.
@@ -768,9 +798,36 @@ class Scores:
             if nb_hard_neg == 0 and self.nb_hard_neg > 0:
                 nb_hard_neg, nb_easy_neg = 1, nb_neg - 1
 
-        # Sampling hard samples with replacement
-        pos_idx = np.random.choice(self.nb_hard_pos, size=nb_hard_pos, replace=True)
-        neg_idx = np.random.choice(self.nb_hard_neg, size=nb_hard_neg, replace=True)
+        if single_pass:
+
+            def _single_pass_sampling(size, n, p):
+                # This threshold is toggling between using the binomial distribution
+                # to choose how often each score will be included in the bootstrap
+                # sample and approximating the binomial distribution with the Poisson
+                # distribution. The Poisson distribution is a sufficiently good
+                # approximation, if n > 100 and n*p < 20 (in our case, n*p is ~1).
+                #
+                # This is different from SINGLE_PASS_SAMPLE_THRESHOLD, which toggles
+                # between single pass and replacement sampling. This is all single
+                # pass sampling.
+                if n < 100:
+                    return np.random.binomial(size=size, n=n, p=p)
+                else:
+                    return np.random.poisson(size=size, lam=n * p)
+
+            nb_pos_selected = _single_pass_sampling(
+                size=self.nb_hard_pos, n=nb_hard_pos, p=1.0 / self.nb_hard_pos
+            )
+            nb_neg_selected = _single_pass_sampling(
+                size=self.nb_hard_neg, n=nb_hard_neg, p=1.0 / self.nb_hard_neg
+            )
+
+            pos_idx = np.repeat(np.arange(self.nb_hard_pos), nb_pos_selected)
+            neg_idx = np.repeat(np.arange(self.nb_hard_neg), nb_neg_selected)
+        else:
+            # Sampling hard samples with replacement
+            pos_idx = np.random.choice(self.nb_hard_pos, size=nb_hard_pos, replace=True)
+            neg_idx = np.random.choice(self.nb_hard_neg, size=nb_hard_neg, replace=True)
 
         return pos_idx, neg_idx, nb_easy_pos, nb_easy_neg
 
@@ -787,9 +844,12 @@ class Scores:
         Returns:
             Scores object with the sampled scores.
         """
-        if config.sampling_method == "replacement":
+        # Resolve "dynamic" sampling to either replacement or single pass sampling.
+        sampling_method = self._sampling_method(config)
+
+        if sampling_method == SAMPLING_METHOD_REPLACEMENT:
             pos_idx, neg_idx, nb_easy_pos, nb_easy_neg = self._sample_indices(
-                by_label=config.stratified_sampling == "by_label"
+                by_label=config.stratified_sampling == "by_label", single_pass=False
             )
 
             pos = self.pos[pos_idx]
@@ -817,7 +877,30 @@ class Scores:
                 score_class=self.score_class,
                 equal_class=self.equal_class,
             )
-        elif config.sampling_method == "proportion":
+        elif sampling_method == SAMPLING_METHOD_SINGLE_PASS:
+            pos_idx, neg_idx, nb_easy_pos, nb_easy_neg = self._sample_indices(
+                by_label=config.stratified_sampling == "by_label", single_pass=True
+            )
+
+            pos = self.pos[pos_idx]
+            neg = self.neg[neg_idx]
+
+            if config.smoothing:
+                # We don't support smoothing, because after smoothing the scores would
+                # not be sorted anymore, which would remove the main source of speedup
+                # for the method.
+                raise ValueError("Smoothing is not supported for single pass sampling.")
+
+            scores = Scores(
+                pos=pos,
+                neg=neg,
+                nb_easy_pos=nb_easy_pos,
+                nb_easy_neg=nb_easy_neg,
+                score_class=self.score_class,
+                equal_class=self.equal_class,
+                is_sorted=True,  # Single-pass sampling returns already sorted scores.
+            )
+        elif sampling_method == SAMPLING_METHOD_PROPORTION:
             if config.ratio is None:
                 raise ValueError("For proportional sampling, ratio has to be defined.")
             # Sampling a sample defined by ratio, without replacement
@@ -838,10 +921,10 @@ class Scores:
                 score_class=self.score_class,
                 equal_class=self.equal_class,
             )
-        elif isinstance(config.sampling_method, str):
+        elif isinstance(sampling_method, str):
             raise ValueError(f"Unsupported sampling method {config.sampling_method}.")
-        elif callable(config.sampling_method):
-            scores = config.sampling_method(self)  # Custom sampling method
+        elif callable(sampling_method):
+            scores = sampling_method(self)  # Custom sampling method
         else:
             raise ValueError("Sampling method must be a string or a callable.")
 

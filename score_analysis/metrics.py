@@ -259,7 +259,7 @@ def fnr(matrix: np.ndarray) -> Union[np.ndarray, float]:
     return res
 
 
-# Aliases for within Onfido use.
+# Aliases.
 def tar(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
     True Acceptance Rate. Alias for :func:`tpr`.
@@ -344,7 +344,7 @@ def fnr_ci(matrix: np.ndarray, alpha: float = 0.05) -> np.ndarray:
     return binomial_ci(count=fn(matrix), nobs=p(matrix), alpha=alpha)
 
 
-# Aliases for within Onfido use.
+# Aliases.
 def tar_ci(matrix: np.ndarray, alpha: float = 0.05) -> np.ndarray:
     """
     Confidence interval for the True Acceptance Rate. Alias for :func:`tpr_ci`.
@@ -420,7 +420,7 @@ def tonr(matrix: np.ndarray) -> Union[np.ndarray, float]:
     return res
 
 
-# Aliases for within Onfido use.
+# Aliases.
 def acceptance_rate(matrix: np.ndarray) -> Union[np.ndarray, float]:
     """
     Acceptance Rate. Alias for :func:`topr`.

@@ -264,7 +264,7 @@ class GroupScores(Scores):
         """Per-group Test Outcome Negative Rate at threshold(s)."""
         return self.group_cm(threshold).tonr()
 
-    # Aliases for within Onfido use.
+    # Aliases.
     def group_tar(self, threshold):
         """
         Per-group True Acceptance Rate at threshold(s).

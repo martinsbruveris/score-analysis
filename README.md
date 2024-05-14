@@ -1,16 +1,16 @@
-# onfido-score-analysis
+# score-analysis
 
 Package to analyse ML model results. Contains an efficient implementation of common
 metrics computations such as TPR, FPR, EER and methods for threshold setting.
 
 Check out the online 
-[documentation](https://library-docs.eu-west-1.dev.onfido.xyz/repo/onfido-score-analysis).
+[documentation]().
 
 ## Usage
 
 ### Terminology
 
-At Onfido, we like to work with metrics based on acceptance and rejection, such as
+Sometimes, we like to work with metrics based on acceptance and rejection, such as
 FAR (false acceptance rate) and FRR (false rejection rate), while the standard ML
 terminology talks about positive and negative classes and FPR (false positive rate) and
 FNR (false negative rate).

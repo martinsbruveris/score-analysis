@@ -390,7 +390,7 @@ class ConfusionMatrix:
         """False Negative Rate"""
         return metrics.fnr(self.matrix)
 
-    # Aliases for within Onfido use.
+    # Aliases
     @cm_class_metric
     def tar(self, as_dict: bool = False) -> Union[dict, float, np.ndarray]:
         """
@@ -447,7 +447,7 @@ class ConfusionMatrix:
         """False Negative Rate confidence interval"""
         return metrics.fnr_ci(self.matrix, alpha=alpha)
 
-    # Aliases for within Onfido use.
+    # Aliases.
     @cm_class_metric(axis=-2)
     def tar_ci(
         self, alpha: float = 0.05, *, as_dict: bool = False

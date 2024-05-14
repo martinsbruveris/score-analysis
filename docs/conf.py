@@ -19,8 +19,8 @@ import score_analysis
 
 # -- Project information -----------------------------------------------------
 
-project = "onfido-score-analysis"
-copyright = "2022 Onfido"
+project = "score-analysis"
+copyright = "2024"
 author = "Martins Bruveris"
 
 # The full version, including alpha/beta/rc tags

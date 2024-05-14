@@ -1,20 +1,18 @@
 [tool.poetry]
-name = "onfido-score-analysis"
+name = "score-analysis"
 version = "0.2.3"
-description = "Code to evaluate models"
+description = "Library to evaluate models"
 authors = [
-    "Martins Bruveris <martins.bruveris@onfido.com>",
+    "Martins Bruveris <martins.bruveris@gmx.com>",
+    "Marian Schneider <marian.schnei@gmail.com>",
+    "Jochem Gietema <jochem@giete.ma>",
+    "Simon Bozonnet <simon.bozonnet@gmail.com>"
 ]
 readme = "README.md"
 packages = [{include = "score_analysis"}]
 
-[[tool.poetry.source]]
-name = "onfido"
-url = "https://nexus.mgmt.onfido.xyz/repository/pypi/simple"
-priority = "primary"
-
 [tool.poetry.dependencies]
-python = ">=3.8,<3.11"
+python = ">=3.8,<3.13"
 numpy = "*"
 pandas = "*"
 scipy = "*"

@@ -358,7 +358,7 @@ class Scores:
         """Test Outcome Negative Rate at threshold(s)."""
         return self.cm(threshold).tonr()
 
-    # Aliases for within Onfido use.
+    # Aliases.
     def tar(self, threshold):
         """
         True Acceptance Rate at threshold(s).
@@ -558,7 +558,7 @@ class Scores:
 
         return threshold
 
-    # Aliases for within Onfido use.
+    # Aliases.
     def threshold_at_tar(self, tar):
         """
         Set threshold at True Acceptance Rate

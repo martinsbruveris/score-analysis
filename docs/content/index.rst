@@ -185,7 +185,7 @@ Overall metrics
 Confidence intervals
 --------------------
 
-The library implements bootstrapping to compute confidence intervals for arbirtrary
+The library implements bootstrapping to compute confidence intervals for arbitrary
 (vectorized) measurements. It allows us to compute confidence intervals for arbitrary
 functions
 
@@ -222,16 +222,23 @@ consistent handling of matrix shapes.
 - Whenever a result is a scalar, we return it as such. This is, e.g., the case when
   computing scalar metrics of single confusion matrices, i.e., X=Y=().
 
-
 .. Hidden TOCs
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Score Analysis
+    :maxdepth: 2
+    :caption: Concepts
+    :hidden:
 
-   content/cm
-   content/group_scores
-   content/scores
-   content/metrics
-   content/tools
-   content/utils
+    concepts/confidence_intervals
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Score Analysis
+    :hidden:
+
+    score_analysis/cm
+    score_analysis/group_scores
+    score_analysis/scores
+    score_analysis/metrics
+    score_analysis/tools
+    score_analysis/utils

@@ -18,7 +18,18 @@ from typing import Any, Callable, Optional, Union
 import numpy as np
 
 from .cm import ConfusionMatrix
-from .scores import DEFAULT_BOOTSTRAP_CONFIG, BinaryLabel, BootstrapConfig, Scores
+from .scores import (
+    DEFAULT_BOOTSTRAP_CONFIG,
+    SAMPLING_METHOD_DYNAMIC,
+    SAMPLING_METHOD_PROPORTION,
+    SAMPLING_METHOD_REPLACEMENT,
+    SAMPLING_METHOD_SINGLE_PASS,
+    SINGLE_PASS_SAMPLE_THRESHOLD,
+    BinaryLabel,
+    BootstrapConfig,
+    SamplingMethod,
+    Scores,
+)
 
 
 def groupwise(metric) -> Callable[..., np.ndarray]:
@@ -302,6 +313,25 @@ class GroupScores(Scores):
         """
         return self.group_tonr(threshold)
 
+    def _sampling_method(self, config: BootstrapConfig) -> SamplingMethod:
+        """
+        If sampling method is "dynamic", we select the appropriate method between
+        replacement and single pass, depending on the other bootstrap parameters.
+        """
+        if config.sampling_method != SAMPLING_METHOD_DYNAMIC:
+            return config.sampling_method  # Nothing to choose here.
+
+        if config.stratified_sampling == "by_group":
+            # With group-wise stratification single pass sampling is not faster.
+            return SAMPLING_METHOD_REPLACEMENT
+        elif (
+            self.nb_hard_pos < SINGLE_PASS_SAMPLE_THRESHOLD
+            or self.nb_hard_neg < SINGLE_PASS_SAMPLE_THRESHOLD
+        ):
+            return SAMPLING_METHOD_REPLACEMENT
+        else:
+            return SAMPLING_METHOD_SINGLE_PASS
+
     def bootstrap_sample(
         self,
         config: BootstrapConfig = DEFAULT_BOOTSTRAP_CONFIG,
@@ -315,11 +345,20 @@ class GroupScores(Scores):
         Returns:
             :class:`GroupScores` object with the sampled scores.
         """
-        if config.sampling_method == "replacement":
+        if config.smoothing:
+            raise ValueError("Bootstrap smoothing is not implemented for GroupScores.")
+
+        sampling_method = self._sampling_method(config)
+
+        replacement_sampling = sampling_method == SAMPLING_METHOD_REPLACEMENT
+        single_pass_sampling = sampling_method == SAMPLING_METHOD_SINGLE_PASS
+
+        if replacement_sampling or single_pass_sampling:
             stratified_sampling = config.stratified_sampling
             if stratified_sampling == "by_label" or not stratified_sampling:
                 pos_idx, neg_idx, _, _ = self._sample_indices(
-                    by_label=stratified_sampling == "by_label"
+                    by_label=stratified_sampling == "by_label",
+                    single_pass=single_pass_sampling,
                 )
                 scores = GroupScores(
                     pos=self.pos[pos_idx],
@@ -329,12 +368,20 @@ class GroupScores(Scores):
                     score_class=self.score_class,
                     equal_class=self.equal_class,
                     group_names=self.groups,
+                    # Single-pass sampling returns already sorted scores
+                    is_sorted=single_pass_sampling,
                 )
             elif stratified_sampling == "by_group":
+                # Note: Single pass sampling can technically be combined with
+                # group-wise stratification, but it doesn't lead to faster sampling,
+                # since after the group-wise sampling stage the scores for each group
+                # are concatenated and then still need to be sorted.
                 pos, neg, pos_groups, neg_groups = [], [], [], []
                 for group in self.groups:
                     group_scores = self[group]
-                    pos_idx, neg_idx, _, _ = group_scores._sample_indices()
+                    pos_idx, neg_idx, _, _ = group_scores._sample_indices(
+                        by_label=False, single_pass=single_pass_sampling
+                    )
                     pos.append(group_scores.pos[pos_idx])
                     neg.append(group_scores.neg[neg_idx])
                     pos_groups.append(np.asarray([group for _ in pos_idx]))
@@ -348,6 +395,7 @@ class GroupScores(Scores):
                     score_class=self.score_class,
                     equal_class=self.equal_class,
                     group_names=self.groups,
+                    is_sorted=False,  # See note above about single pass sampling here.
                 )
             else:
                 raise ValueError(f"Unsupported value for {stratified_sampling=}.")
@@ -355,12 +403,12 @@ class GroupScores(Scores):
             if config.smoothing:
                 raise ValueError("Smoothing is not supported for GroupScores.")
 
-        elif config.sampling_method == "proportion":
+        elif sampling_method == SAMPLING_METHOD_PROPORTION:
             raise ValueError("Proportional sampling is not supported for GroupScores.")
-        elif isinstance(config.sampling_method, str):
+        elif isinstance(sampling_method, str):
             raise ValueError(f"Unsupported sampling method {config.sampling_method}.")
-        elif callable(config.sampling_method):
-            scores = config.sampling_method(self)  # Custom sampling method
+        elif callable(sampling_method):
+            scores = sampling_method(self)  # Custom sampling method
         else:
             raise ValueError("Sampling method must be a string or a callable.")
 

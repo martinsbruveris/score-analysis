@@ -509,6 +509,16 @@ def test_bootstrap_sample_callable():
     assert sample == scores
 
 
+def test_bootstrap_sample_invalid_smoothing():
+    """Tests that single pass sampling is incompatible with smoothing."""
+    scores = Scores(pos=[1, 2, 3, 4], neg=[1, 2, 3])
+
+    with pytest.raises(ValueError):
+        scores.bootstrap_sample(
+            config=BootstrapConfig(sampling_method="single_pass", smoothing=True)
+        )
+
+
 @pytest.mark.parametrize("metric", ["eer", Scores.eer])
 @pytest.mark.parametrize("nb_samples", [1, 3])
 def test_bootstrap_metric(metric, nb_samples):

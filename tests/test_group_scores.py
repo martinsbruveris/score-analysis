@@ -75,11 +75,19 @@ def test_group_cm():
     "metric",
     # fmt: off
     [
-        "tpr", "fnr", "tnr", "fpr",
-        "topr", "tonr",
-        "tar", "frr", "trr", "far",
-        "acceptance_rate", "rejection_rate",
-    ]
+        "tpr",
+        "fnr",
+        "tnr",
+        "fpr",
+        "topr",
+        "tonr",
+        "tar",
+        "frr",
+        "trr",
+        "far",
+        "acceptance_rate",
+        "rejection_rate",
+    ],
     # fmr: on
 )
 def test_group_metrics(metric):

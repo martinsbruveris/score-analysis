@@ -31,7 +31,6 @@ seaborn = { version = "*", optional = true }
 tqdm = { version = "*", optional = true }
 
 [tool.poetry.dev-dependencies]
-black = { version = "*", allow-prereleases = true }
 bumpversion = "*"
 pre-commit = "*"
 pytest = "*"

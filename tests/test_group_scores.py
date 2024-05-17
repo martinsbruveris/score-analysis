@@ -73,14 +73,20 @@ def test_group_cm():
 
 @pytest.mark.parametrize(
     "metric",
-    # fmt: off
     [
-        "tpr", "fnr", "tnr", "fpr",
-        "topr", "tonr",
-        "tar", "frr", "trr", "far",
-        "acceptance_rate", "rejection_rate",
-    ]
-    # fmr: on
+        "tpr",
+        "fnr",
+        "tnr",
+        "fpr",
+        "topr",
+        "tonr",
+        "tar",
+        "frr",
+        "trr",
+        "far",
+        "acceptance_rate",
+        "rejection_rate",
+    ],
 )
 def test_group_metrics(metric):
     scores = GroupScores(

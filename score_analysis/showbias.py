@@ -164,7 +164,6 @@ def showbias(
         )
 
     if bootstrap_ci:
-
         samples = score_object.bootstrap_metric(
             calculate_group_metric,
             config=bootstrap_config,

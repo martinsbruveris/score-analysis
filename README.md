@@ -368,10 +368,15 @@ which should result in a table like this:
 Before submitting an MR, please run
 
 ```shell
-make style
+poetry run task check_style
 ```
 
-This will run `black`, `isort` and `flake8` on the code.
+and if necessary run:
+```shell
+poetry run task format
+```
+
+This will run `ruff` to check the code and, if necessary, format it.
 
 Unit tests can be executed via
 

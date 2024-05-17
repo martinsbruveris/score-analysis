@@ -1,5 +1,3 @@
-check_dirs := score_analysis tests
-
 # Run tests for the library
 test:
 	poetry run coverage erase

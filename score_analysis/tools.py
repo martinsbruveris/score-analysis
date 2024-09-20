@@ -22,6 +22,22 @@ class ROCCurve:
     fnr_ci: Optional[np.ndarray] = None
     fpr_ci: Optional[np.ndarray] = None
 
+    @property
+    def tpr(self):
+        return 1.0 - self.fnr
+
+    @property
+    def tnr(self):
+        return 1.0 - self.fpr
+
+    @property
+    def tpr_ci(self):
+        return None if self.fnr_ci is None else np.copy(1.0 - self.fnr_ci[..., ::-1])
+
+    @property
+    def tnr_ci(self):
+        return None if self.fpr_ci is None else np.copy(1.0 - self.fpr_ci[..., ::-1])
+
 
 def roc(
     scores: Scores,
@@ -49,6 +65,8 @@ def roc(
         default_fpr = np.linspace(0.0, 1.0, nb_fpr_points, endpoint=True)
         fpr_thresholds = scores.threshold_at_fpr(default_fpr)
         thresholds = np.concatenate([fnr_thresholds, fpr_thresholds])
+
+        thresholds = np.sort(thresholds)
 
     fnr = scores.fnr(thresholds)
     fpr = scores.fpr(thresholds)

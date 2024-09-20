@@ -302,6 +302,26 @@ def test_threshold_setting(scores, ratio, score_class, equal_class):
 
 
 @pytest.mark.parametrize(
+    "pos, tpr, expected, method",
+    [
+        [[1, 2, 2, 2, 4], [0.9, 0.7, 0.5, 0.3, 0.1], [1.5, 2, 2, 3, 4], "linear"],
+        [[1, 2, 2, 2, 4], [0.9, 0.7, 0.5, 0.3, 0.1], [1, 2, 2, 2, 4], "lower"],
+        [[1, 2, 2, 2, 4], [0.9, 0.7, 0.5, 0.3, 0.1], [2, 2, 2, 4, 4], "higher"],
+    ],
+)
+def test_threshold_setting_interpolation(pos, tpr, expected, method):
+    scores = Scores(pos, [])
+    threshold = expected = scores.threshold_at_tpr(tpr, method=method)
+    np.testing.assert_allclose(threshold, expected, atol=1e-10)
+
+
+def test_threshold_setting_interpolation_invalid_method():
+    scores = Scores(pos=[1, 2, 3], neg=[])
+    with pytest.raises(ValueError):
+        scores.threshold_at_tpr(0.3, method="no_such_method")
+
+
+@pytest.mark.parametrize(
     "scores, ratio, score_class, equal_class",
     [
         [[1, 2, 3, 4], [0, 0.25, 0.5, 0.75, 1], "pos", "pos"],

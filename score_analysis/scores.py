@@ -568,6 +568,12 @@ class Scores:
                 negative scores.
             method: Possible values are "linear", "lower", "higher".
         """
+        if method not in {"lower", "higher", "linear"}:
+            raise ValueError(f"Unknown interpolation method: {method}.")
+
+        # Dictionary for reversing the interpolation method.
+        reverse_method = {"lower": "higher", "higher": "lower", "linear": "linear"}
+
         isscalar = np.isscalar(target_ratio)
         target_ratio = np.asarray(target_ratio)
 
@@ -582,11 +588,12 @@ class Scores:
         # not change continuity.
         if not increasing:
             target_ratio = 1.0 - target_ratio
+            method = reverse_method[method]
         # And we transform the score direction as well. This does change continuity.
         if self.score_class != BinaryLabel.pos:
             target_ratio = 1.0 - target_ratio
             left_continuous = not left_continuous
-
+            method = reverse_method[method]
         # From here on, we can pretend to be in the standard case, i.e., calculate
         # thresholds based on an increasing metric.
         threshold = self._invert_increasing_function(
@@ -620,10 +627,8 @@ class Scores:
             threshold = la * scores[left_idx] + (1 - la) * scores[right_idx]
         elif method == "lower":
             threshold = scores[left_idx]
-        elif method == "higher":
+        else:  # "higher"
             threshold = scores[right_idx]
-        else:
-            raise ValueError(f"Unknown value for interpolation method: {method}.")
         threshold = np.asarray(threshold)  # We need this when target_ratio is scalar
 
         # Special cases of TPR <= 0. and TPR >= 1.
@@ -791,6 +796,50 @@ class Scores:
         threshold = self.threshold_at_fpr(eer)
 
         return threshold, eer
+
+    def auc(
+        self,
+        *,
+        lower: float = 0.0,
+        upper: float = 1.0,
+        x_axis: str = "fpr",
+        y_axis: str = "tpr",
+    ):
+        """
+        Computes the (partial) AUC for the given Scores object using the trapezoid
+        integration rule.
+
+        Args:
+
+        """
+        # We add +/-eps to each score to deal with continuity properties of the ROC
+        # curve. AUC is invariant to left-/right-continuity, but the metrics have
+        # varying continuity behaviour at the score values. Duplicating the scores
+        # makes the function slower, but it means that we don't have to figure out
+        # continuity properties by hand.
+        points = np.nextafter(
+            np.concatenate([self.pos, self.neg]), [[-np.inf], [np.inf]]
+        )
+        points = np.sort(points.flatten())
+
+        x = getattr(self, x_axis)(points)
+        y = getattr(self, y_axis)(points)
+
+        if x[-1] < x[0]:
+            x = x[::-1]
+            y = y[::-1]
+        left = np.searchsorted(x, lower, side="left")  # x[l - 1] < lower <= x[l]
+        right = np.searchsorted(x, upper, side="right")  # x[r - 1] <= upper < x[r]
+
+        x = np.concatenate([[lower], x[left:right], [upper]])
+        y = np.concatenate([[y[left]], y[left:right], [y[right - 1]]])
+
+        try:
+            trapezoid = np.trapezoid  # Only available in Numpy 2.x
+        except AttributeError:  # pragma: no cover
+            trapezoid = np.trapz  # Deprecated
+        # We use abs, so we don't have to worry about increasing/decreasing values.
+        return np.abs(trapezoid(y, x))
 
     @staticmethod
     def _find_root(f, xa, xe, find_first, xtol=1e-10) -> float:

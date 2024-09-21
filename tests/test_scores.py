@@ -434,6 +434,53 @@ def test_find_root_invalid_input():
         Scores._find_root(lambda _: 1.0, 0.0, 1.0, True)
 
 
+@pytest.mark.parametrize("lower, upper", [(0.0, 1.0), (0.3, 0.8)])
+def test_auc(lower, upper):
+    # ROC curve is TPR=0.5 for FPR in [0, 0.5] and TPR=1.0 for FPR in [0.5, 1]
+    scores = Scores(pos=[2.0, 4.0], neg=[1.0, 3.0])
+    result = scores.auc(lower=lower, upper=upper)
+
+    # Formula is valid for lower in [0, 0.5] and upper in [0.5, 1]
+    expected = 0.5 * (0.5 - lower) + 1.0 * (upper - 0.5)
+
+    np.testing.assert_almost_equal(result, expected)
+
+
+@pytest.mark.parametrize("score_class", ["pos", "neg"])
+@pytest.mark.parametrize("equal_class", ["pos", "neg"])
+@pytest.mark.parametrize(
+    "lower, upper, expected", [(0.0, 1.0, 0.375), (0.4, 0.6, 0.075)]
+)
+def test_auc_2(score_class, equal_class, lower, upper, expected):
+    # For score_class=pos, ROC curve is TPR=0 on [0, 0.25], 0.25 on [0.25, 0.5],
+    # 0.5 on [0.5, 0.75], and 0.75 on [0.75, 1].
+    scores = Scores(
+        pos=[1.0, 2.0, 3.0, 4],
+        neg=[1.5, 2.5, 3.5, 4.5],
+        score_class=score_class,
+        equal_class=equal_class,
+    )
+    # When score_class = "neg", ROC curve shifts vertically by 0.25
+    if score_class == "neg":
+        expected += (upper - lower) * 0.25
+
+    result = scores.auc(lower=lower, upper=upper, x_axis="fpr", y_axis="tpr")
+    np.testing.assert_almost_equal(result, expected)
+
+    # Reverse y-axis
+    result = scores.auc(lower=lower, upper=upper, x_axis="fpr", y_axis="fnr")
+    np.testing.assert_almost_equal(result, upper - lower - expected)
+
+    # Reverse x-axis
+    result = scores.auc(lower=1 - upper, upper=1 - lower, x_axis="tnr", y_axis="tpr")
+    np.testing.assert_almost_equal(result, expected)
+
+    # Swap x- and y-axes, but only for full AUC
+    if lower == 0.0 and upper == 1.0:
+        result = scores.auc(lower=0.0, upper=1.0, x_axis="tpr", y_axis="fpr")
+        np.testing.assert_almost_equal(result, 1.0 - expected)
+
+
 @pytest.mark.parametrize("stratified_sampling", ["by_label", None])
 @pytest.mark.parametrize("smoothing", [True, False])
 def test_bootstrap_sample_replacement(stratified_sampling, smoothing):

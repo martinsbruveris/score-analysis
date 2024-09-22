@@ -799,9 +799,9 @@ class Scores:
 
     def auc(
         self,
-        *,
         lower: float = 0.0,
         upper: float = 1.0,
+        *,
         x_axis: str = "fpr",
         y_axis: str = "tpr",
     ):
@@ -810,7 +810,10 @@ class Scores:
         integration rule.
 
         Args:
-
+            lower: Lower limit of integration.
+            upper: Upper limit of integration.
+            x_axis: Metric to plot on x-axis. Defaults to FPR.
+            y_axis: Metric to plot on y-axis. Defaults to TPR.
         """
         # We add +/-eps to each score to deal with continuity properties of the ROC
         # curve. AUC is invariant to left-/right-continuity, but the metrics have
@@ -830,6 +833,10 @@ class Scores:
             y = y[::-1]
         left = np.searchsorted(x, lower, side="left")  # x[l - 1] < lower <= x[l]
         right = np.searchsorted(x, upper, side="right")  # x[r - 1] <= upper < x[r]
+
+        # Ensure indices are in range
+        left = np.minimum(left, len(y) - 1)
+        right = np.maximum(right, 1)
 
         x = np.concatenate([[lower], x[left:right], [upper]])
         y = np.concatenate([[y[left]], y[left:right], [y[right - 1]]])

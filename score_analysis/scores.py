@@ -1082,6 +1082,8 @@ class Scores:
             function will return an array of shape (nb_samples, X).
         """
         if isinstance(metric, str):
+            # getattr(self) would resolve the method from Scores, while type(self) will
+            # return the method from the subclass, e.g., from GroupScores.
             metric = getattr(type(self), metric)
 
         m = np.asarray(metric(self, **kwargs))

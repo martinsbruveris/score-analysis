@@ -774,35 +774,6 @@ files = [
 ]
 
 [[package]]
-name = "deprecation"
-version = "2.1.0"
-description = "A library to handle automated deprecations"
-optional = true
-python-versions = "*"
-files = [
-    {file = "deprecation-2.1.0-py2.py3-none-any.whl", hash = "sha256:a10811591210e1fb0e768a8c25517cabeabcba6f0bf96564f8ff45189f90b14a"},
-    {file = "deprecation-2.1.0.tar.gz", hash = "sha256:72b3bde64e5d778694b0cf68178aed03d15e15477116add3fb773e581f9518ff"},
-]
-
-[package.dependencies]
-packaging = "*"
-
-[[package]]
-name = "deprecation-alias"
-version = "0.3.3"
-description = "A wrapper around 'deprecation' providing support for deprecated aliases."
-optional = true
-python-versions = ">=3.6.1"
-files = [
-    {file = "deprecation-alias-0.3.3.tar.gz", hash = "sha256:e73266d4c866c040079d7a047f92ac2cd468b4608032486df1ffd7ef147e6515"},
-    {file = "deprecation_alias-0.3.3-py3-none-any.whl", hash = "sha256:9dee812aedc307d65be58164e55b4ae0121fd1ca80f48402b6ccc134453f02a8"},
-]
-
-[package.dependencies]
-deprecation = ">=2.1.0"
-packaging = ">=20.4"
-
-[[package]]
 name = "dict2css"
 version = "0.3.0.post1"
 description = "A μ-library for constructing cascading style sheets from Python dictionaries."
@@ -1729,17 +1700,6 @@ files = [
     {file = "kiwisolver-1.4.5-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:210ef2c3a1f03272649aff1ef992df2e724748918c4bc2d5a90352849eb40bea"},
     {file = "kiwisolver-1.4.5-pp39-pypy39_pp73-win_amd64.whl", hash = "sha256:11d011a7574eb3b82bcc9c1a1d35c1d7075677fdd15de527d91b46bd35e935ee"},
     {file = "kiwisolver-1.4.5.tar.gz", hash = "sha256:e57e563a57fb22a142da34f38acc2fc1a5c864bc29ca1517a88abc963e60d6ec"},
-]
-
-[[package]]
-name = "lockfile"
-version = "0.12.2"
-description = "Platform-independent file locking module"
-optional = true
-python-versions = "*"
-files = [
-    {file = "lockfile-0.12.2-py2.py3-none-any.whl", hash = "sha256:6c3cb24f344923d30b2785d5ad75182c8ea7ac1b6171b08657258ec7429d50fa"},
-    {file = "lockfile-0.12.2.tar.gz", hash = "sha256:6aed02de03cba24efabcd600b30540140634fc06cfa603822d508d5361e9f799"},
 ]
 
 [[package]]
@@ -3317,27 +3277,27 @@ files = [
 
 [[package]]
 name = "sphinx"
-version = "4.5.0"
+version = "5.3.0"
 description = "Python documentation generator"
 optional = true
 python-versions = ">=3.6"
 files = [
-    {file = "Sphinx-4.5.0-py3-none-any.whl", hash = "sha256:ebf612653238bcc8f4359627a9b7ce44ede6fdd75d9d30f68255c7383d3a6226"},
-    {file = "Sphinx-4.5.0.tar.gz", hash = "sha256:7bf8ca9637a4ee15af412d1a1d9689fec70523a68ca9bb9127c2f3eeb344e2e6"},
+    {file = "Sphinx-5.3.0.tar.gz", hash = "sha256:51026de0a9ff9fc13c05d74913ad66047e104f56a129ff73e174eb5c3ee794b5"},
+    {file = "sphinx-5.3.0-py3-none-any.whl", hash = "sha256:060ca5c9f7ba57a08a1219e547b269fadf125ae25b06b9fa7f66768efb652d6d"},
 ]
 
 [package.dependencies]
 alabaster = ">=0.7,<0.8"
-babel = ">=1.3"
-colorama = {version = ">=0.3.5", markers = "sys_platform == \"win32\""}
-docutils = ">=0.14,<0.18"
-imagesize = "*"
-importlib-metadata = {version = ">=4.4", markers = "python_version < \"3.10\""}
-Jinja2 = ">=2.3"
-packaging = "*"
-Pygments = ">=2.0"
+babel = ">=2.9"
+colorama = {version = ">=0.4.5", markers = "sys_platform == \"win32\""}
+docutils = ">=0.14,<0.20"
+imagesize = ">=1.3"
+importlib-metadata = {version = ">=4.8", markers = "python_version < \"3.10\""}
+Jinja2 = ">=3.0"
+packaging = ">=21.0"
+Pygments = ">=2.12"
 requests = ">=2.5.0"
-snowballstemmer = ">=1.1"
+snowballstemmer = ">=2.0"
 sphinxcontrib-applehelp = "*"
 sphinxcontrib-devhelp = "*"
 sphinxcontrib-htmlhelp = ">=2.0.0"
@@ -3347,8 +3307,8 @@ sphinxcontrib-serializinghtml = ">=1.1.5"
 
 [package.extras]
 docs = ["sphinxcontrib-websupport"]
-lint = ["docutils-stubs", "flake8 (>=3.5.0)", "isort", "mypy (>=0.931)", "types-requests", "types-typed-ast"]
-test = ["cython", "html5lib", "pytest", "pytest-cov", "typed-ast"]
+lint = ["docutils-stubs", "flake8 (>=3.5.0)", "flake8-bugbear", "flake8-comprehensions", "flake8-simplify", "isort", "mypy (>=0.981)", "sphinx-lint", "types-requests", "types-typed-ast"]
+test = ["cython", "html5lib", "pytest (>=4.6)", "typed_ast"]
 
 [[package]]
 name = "sphinx-autodoc-typehints"
@@ -3418,58 +3378,57 @@ dev = ["bump2version", "sphinxcontrib-httpdomain", "transifex-client", "wheel"]
 
 [[package]]
 name = "sphinx-tabs"
-version = "3.2.0"
+version = "3.4.5"
 description = "Tabbed views for Sphinx"
 optional = true
-python-versions = "~=3.6"
+python-versions = "~=3.7"
 files = [
-    {file = "sphinx-tabs-3.2.0.tar.gz", hash = "sha256:33137914ed9b276e6a686d7a337310ee77b1dae316fdcbce60476913a152e0a4"},
-    {file = "sphinx_tabs-3.2.0-py3-none-any.whl", hash = "sha256:1e1b1846c80137bd81a78e4a69b02664b98b1e1da361beb30600b939dfc75065"},
+    {file = "sphinx-tabs-3.4.5.tar.gz", hash = "sha256:ba9d0c1e3e37aaadd4b5678449eb08176770e0fc227e769b6ce747df3ceea531"},
+    {file = "sphinx_tabs-3.4.5-py3-none-any.whl", hash = "sha256:92cc9473e2ecf1828ca3f6617d0efc0aa8acb06b08c56ba29d1413f2f0f6cf09"},
 ]
 
 [package.dependencies]
-docutils = ">=0.16.0,<0.17.0"
+docutils = "*"
 pygments = "*"
-sphinx = ">=2,<5"
+sphinx = "*"
 
 [package.extras]
 code-style = ["pre-commit (==2.13.0)"]
-testing = ["bs4", "coverage", "pygments", "pytest (>=3.6,<4)", "pytest-cov", "pytest-regressions", "rinohtype", "sphinx-testing"]
+testing = ["bs4", "coverage", "pygments", "pytest (>=7.1,<8)", "pytest-cov", "pytest-regressions", "rinohtype"]
 
 [[package]]
 name = "sphinx-toolbox"
-version = "2.18.3"
+version = "3.8.0"
 description = "Box of handy tools for Sphinx 🧰 📔"
 optional = true
-python-versions = ">=3.6"
+python-versions = ">=3.7"
 files = [
-    {file = "sphinx_toolbox-2.18.3-py3-none-any.whl", hash = "sha256:cb6ef290afdc641924906c8d8684e7082bdd6eaac4fe7d33d8aa252bec0fd818"},
-    {file = "sphinx_toolbox-2.18.3.tar.gz", hash = "sha256:129d8bfc387044dcdc61b025d33a2fbe77a8e66e5419d8d329a7cb3100703e93"},
+    {file = "sphinx_toolbox-3.8.0-py3-none-any.whl", hash = "sha256:36f484c540569c0fb62b4197187d166443fe0708134b98c88f6ba5418d06b95e"},
+    {file = "sphinx_toolbox-3.8.0.tar.gz", hash = "sha256:f6b62c7800dc2a2e2cbaf7b13ee7c5f06cbf3e1a5ad2c4b2f0744851a05afaee"},
 ]
 
 [package.dependencies]
 apeye = ">=0.4.0"
 autodocsumm = ">=0.2.0"
 beautifulsoup4 = ">=4.9.1"
-cachecontrol = {version = ">=0.12.6", extras = ["filecache"]}
-deprecation-alias = ">=0.2.0"
+cachecontrol = {version = ">=0.13.0", extras = ["filecache"]}
 dict2css = ">=0.2.3"
-docutils = "0.16"
+docutils = ">=0.16"
 domdf-python-tools = ">=2.9.0"
+filelock = ">=3.8.0"
 html5lib = ">=1.1"
-lockfile = ">=0.12.2"
 "ruamel.yaml" = ">=0.16.12"
 sphinx = ">=3.2.0"
-sphinx-autodoc-typehints = ">=1.11.1,<=1.14.1"
+sphinx-autodoc-typehints = ">=1.11.1"
 sphinx-jinja2-compat = ">=0.1.0"
 sphinx-prompt = ">=1.1.0"
-sphinx-tabs = ">=1.2.1,<=3.2.0"
+sphinx-tabs = ">=1.2.1,<3.5.0"
 tabulate = ">=0.8.7"
 typing-extensions = ">=3.7.4.3,<3.10.0.1 || >3.10.0.1"
 
 [package.extras]
-all = ["coincidence (>=0.4.3)", "pygments (>=2.7.4)"]
-testing = ["coincidence (>=0.4.3)", "pygments (>=2.7.4)"]
+all = ["coincidence (>=0.4.3)", "pygments (>=2.7.4,<=2.13.0)"]
+testing = ["coincidence (>=0.4.3)", "pygments (>=2.7.4,<=2.13.0)"]
 
 [[package]]
 name = "sphinxcontrib-applehelp"
@@ -3884,4 +3843,4 @@ jupyter = ["jupyter", "matplotlib", "seaborn", "tqdm"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.13"
-content-hash = "c418b687476f820fc2c11187ca585f237cf50ceb28ef19999a9eb09e8babdc06"
+content-hash = "1ca034cfa34174fdb764df2b8aaa0228ebb0b0bc8814c8a6fee18662586f55e7"

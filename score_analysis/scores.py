@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -407,8 +407,17 @@ class Scores:
         """
         return self.tonr(threshold)
 
-    def threshold_at_tpr(self, tpr):
-        """Set threshold at True Positive Rate."""
+    def threshold_at_tpr(self, tpr, *, method: str = "linear"):
+        """
+        Set threshold at True Positive Rate.
+
+        Args:
+            tpr: TPR values at which to set threshold.
+            method: Possible values are "linear", "lower", "higher". If "lower"
+                or "higher", we return the closest score at which the metric is
+                lower or higher that the target. If "linear", we apply linear
+                interpolation between the lower and higher values.
+        """
         if len(self.pos) == 0:
             raise ValueError("Cannot set threshold at TPR with no positive values.")
         # Example: We want threshold at 70% TPR. If easy_pos_ratio=60%, then we want
@@ -416,40 +425,74 @@ class Scores:
         # 70% - 60% = 10% is 25% of the remaining 40%
         tpr = np.maximum(np.asarray(tpr) - self.easy_pos_ratio, 0.0)
         tpr = np.minimum(tpr / self.hard_pos_ratio, 1.0)
-        return self._threshold_at_ratio(self.pos, tpr, False, BinaryLabel.pos)
+        return self._threshold_at_ratio(self.pos, tpr, False, BinaryLabel.pos, method)
 
-    def threshold_at_fnr(self, fnr):
-        """Set threshold at False Negative Rate."""
+    def threshold_at_fnr(self, fnr, *, method: str = "linear"):
+        """
+        Set threshold at False Negative Rate.
+
+        Args:
+            fnr: FNR values at which to set threshold.
+            method: Possible values are "linear", "lower", "higher". If "lower"
+                or "higher", we return the closest score at which the metric is
+                lower or higher that the target. If "linear", we apply linear
+                interpolation between the lower and higher values.
+        """
         if len(self.pos) == 0:
             raise ValueError("Cannot set threshold at FNR with no positive values.")
         # Example: We want the threshold at 5% FNR. If hard_pos_ratio=10%, then we want
         # the threshold at 5% / 0.1 = 50% of the available 10% of hard positives.
         fnr = np.minimum(np.asarray(fnr) / self.hard_pos_ratio, 1.0)
-        return self._threshold_at_ratio(self.pos, fnr, True, BinaryLabel.pos)
+        return self._threshold_at_ratio(self.pos, fnr, True, BinaryLabel.pos, method)
 
-    def threshold_at_tnr(self, tnr):
-        """Set threshold at True Negative Rate."""
+    def threshold_at_tnr(self, tnr, *, method: str = "linear"):
+        """
+        Set threshold at True Negative Rate.
+
+        Args:
+            tnr: TNR values at which to set threshold.
+            method: Possible values are "linear", "lower", "higher". If "lower"
+                or "higher", we return the closest score at which the metric is
+                lower or higher that the target. If "linear", we apply linear
+                interpolation between the lower and higher values.
+        """
         if len(self.neg) == 0:
             raise ValueError("Cannot set threshold at TNR with no negative values.")
         # See explanation in threshold_at_tpr()
         tnr = np.maximum(np.asarray(tnr) - self.easy_neg_ratio, 0.0)
         tnr = np.minimum(tnr / self.hard_neg_ratio, 1.0)
-        return self._threshold_at_ratio(self.neg, tnr, True, BinaryLabel.neg)
+        return self._threshold_at_ratio(self.neg, tnr, True, BinaryLabel.neg, method)
 
-    def threshold_at_fpr(self, fpr):
-        """Set threshold at False Positive Rate."""
+    def threshold_at_fpr(self, fpr, *, method: str = "linear"):
+        """
+        Set threshold at False Positive Rate.
+
+        Args:
+            fpr: FPR values at which to set threshold.
+            method: Possible values are "linear", "lower", "higher". If "lower"
+                or "higher", we return the closest score at which the metric is
+                lower or higher that the target. If "linear", we apply linear
+                interpolation between the lower and higher values.
+        """
         if len(self.neg) == 0:
             raise ValueError("Cannot set threshold at FPR with no negative values.")
         # See explanation at threshold_at_fnr()
         fpr = np.minimum(np.asarray(fpr) / self.hard_neg_ratio, 1.0)
-        return self._threshold_at_ratio(self.neg, fpr, False, BinaryLabel.neg)
+        return self._threshold_at_ratio(self.neg, fpr, False, BinaryLabel.neg, method)
 
-    def threshold_at_topr(self, topr):
+    def threshold_at_topr(self, topr, *, method: str = "linear"):
         """
         Set threshold at Test Outcome Positive Rate.
 
         This is the proportion of samples where the test outcome is positive,
         i.e. the test detects the condition.
+
+        Args:
+            topr: TOPR values at which to set threshold.
+            method: Possible values are "linear", "lower", "higher". If "lower"
+                or "higher", we return the closest score at which the metric is
+                lower or higher that the target. If "linear", we apply linear
+                interpolation between the lower and higher values.
         """
         concat_scores = np.sort(np.concatenate([self.neg, self.pos]))
         if len(concat_scores) == 0:
@@ -458,14 +501,23 @@ class Scores:
         easy_pos_to_total_ratio = self.nb_easy_pos / self.nb_all_samples
         topr = np.maximum(np.asarray(topr) - easy_pos_to_total_ratio, 0.0)
         topr = np.minimum(topr / self.hard_ratio, 1.0)
-        return self._threshold_at_ratio(concat_scores, topr, False, BinaryLabel.pos)
+        return self._threshold_at_ratio(
+            concat_scores, topr, False, BinaryLabel.pos, method
+        )
 
-    def threshold_at_tonr(self, tonr):
+    def threshold_at_tonr(self, tonr, *, method: str = "linear"):
         """
         Set threshold at Test Outcome Negative Rate.
 
         This is the proportion of samples where the test outcome is negative,
         i.e. the test does not detect the condition.
+
+        Args:
+            tonr: TONR values at which to set threshold.
+            method: Possible values are "linear", "lower", "higher". If "lower"
+                or "higher", we return the closest score at which the metric is
+                lower or higher that the target. If "linear", we apply linear
+                interpolation between the lower and higher values.
         """
         concat_scores = np.sort(np.concatenate([self.neg, self.pos]))
         if len(concat_scores) == 0:
@@ -477,40 +529,57 @@ class Scores:
         easy_neg_to_total_ratio = self.nb_easy_neg / self.nb_all_samples
         tonr = np.maximum(np.asarray(tonr) - easy_neg_to_total_ratio, 0.0)
         tonr = np.minimum(tonr / self.hard_ratio, 1.0)
-        return self._threshold_at_ratio(concat_scores, tonr, True, BinaryLabel.neg)
+        return self._threshold_at_ratio(
+            concat_scores, tonr, True, BinaryLabel.neg, method
+        )
 
     def _threshold_at_ratio(
-        self, scores, target_ratio, increasing: bool, ratio_class: BinaryLabel
+        self,
+        scores,
+        target_ratio,
+        increasing: bool,
+        ratio_class: BinaryLabel,
+        method: str,
     ):
         """
-        Helper function to set the threshold at a specific metric. The metrics covered
-        are TPR, FPR, TNR and FNR.
+        Helper function to set the threshold at a specific metric, for metrics that
+        are defined as ratios, such as TPR, FPR, TNR and FNR.
 
-        Parameters are with respect to the case
-            score_class = "pos" and equal_class = "pos"
-        The parameters have the following meaning
-         - increasing states, whether the metric is increasing or decreasing
-           with increasing scores.
-         - ratio_class states, whether the metric is calculated from positives or
-           negatives.
-        The following table relates them to TPR, etc.
+        The following table relates the parameters ``increasing`` and ``ratio_class``
+        to common metrics, e.g., TPR, etc.
 
-                 Increasing  ratio_class
+                 increasing  ratio_class
             TPR     False        pos
             FNR     True         pos
             TNR     True         neg
             FPR     False        neg
 
         We compute a threshold, such that
-            P(score <= threshold) = target_ratio, if right_continuous = True
-            P(score < threshold) = target_ratio, if right_continuous = False
+            P(score < threshold) = target_ratio, if metric is left continuous
+            P(score <= threshold) = target_ratio, if metric is right continuous
+
+        Args:
+            scores: Array of scores to threshold
+            target_ratio: The threshold is set such that the target_ratio of scores
+                will be above or below the threshold. This can be an array.
+            increasing: States, if the metric is increasing or decreasing, when
+                score_class = "pos". Note that this is a property of the metric.
+            ratio_class: States, if the metric is calculated using positive or
+                negative scores.
+            method: Possible values are "linear", "lower", "higher".
         """
+        if method not in {"lower", "higher", "linear"}:
+            raise ValueError(f"Unknown interpolation method: {method}.")
+
+        # Dictionary for reversing the interpolation method.
+        reverse_method = {"lower": "higher", "higher": "lower", "linear": "linear"}
+
         isscalar = np.isscalar(target_ratio)
         target_ratio = np.asarray(target_ratio)
 
-        # The standard case is an increasing metric based on pos, i.e., FNR, with
-        # equal_class and score_class equal to pos. This case is left-continuous.
-        # Metrics based on neg, change the continuity behaviour at the sample points.
+        # The standard case is an increasing metric based on positive scores, i.e., FNR,
+        # with equal_class and score_class equal to pos. This case is left-continuous.
+        # Metrics based on neg, reverse the continuity behaviour.
         left_continuous = ratio_class == BinaryLabel.pos
         # The equality class also determines the continuity
         if self.equal_class != BinaryLabel.pos:
@@ -519,15 +588,16 @@ class Scores:
         # not change continuity.
         if not increasing:
             target_ratio = 1.0 - target_ratio
-        # And we transform the score direction as well
+            method = reverse_method[method]
+        # And we transform the score direction as well. This does change continuity.
         if self.score_class != BinaryLabel.pos:
             target_ratio = 1.0 - target_ratio
             left_continuous = not left_continuous
-
+            method = reverse_method[method]
         # From here on, we can pretend to be in the standard case, i.e., calculate
-        # thresholds based on an increasing metric
+        # thresholds based on an increasing metric.
         threshold = self._invert_increasing_function(
-            scores, target_ratio, left_continuous
+            scores, target_ratio, left_continuous, method
         )
 
         if isscalar:
@@ -535,7 +605,11 @@ class Scores:
         return threshold
 
     @staticmethod
-    def _invert_increasing_function(scores, target_ratio, left_continuous: bool):
+    def _invert_increasing_function(
+        scores, target_ratio, left_continuous: bool, method: str
+    ):
+        scores = scores.astype(float)  # Otherwise we can get problems with nextafter
+
         if not left_continuous:
             min_ratio = 1.0 / len(scores)
             target_ratio = target_ratio - min_ratio
@@ -549,7 +623,12 @@ class Scores:
         left_idx = np.maximum(np.minimum(left_idx.astype(int), len(scores) - 1), 0)
         right_idx = np.maximum(np.minimum(right_idx.astype(int), len(scores) - 1), 0)
 
-        threshold = la * scores[left_idx] + (1 - la) * scores[right_idx]
+        if method == "linear":
+            threshold = la * scores[left_idx] + (1 - la) * scores[right_idx]
+        elif method == "lower":
+            threshold = scores[left_idx]
+        else:  # "higher"
+            threshold = scores[right_idx]
         threshold = np.asarray(threshold)  # We need this when target_ratio is scalar
 
         # Special cases of TPR <= 0. and TPR >= 1.
@@ -559,69 +638,69 @@ class Scores:
         return threshold
 
     # Aliases.
-    def threshold_at_tar(self, tar):
+    def threshold_at_tar(self, tar, *, method: str = "linear"):
         """
         Set threshold at True Acceptance Rate
 
         Alias for :func:`~Scores.threshold_at_tpr`.
         """
-        return self.threshold_at_tpr(tpr=tar)
+        return self.threshold_at_tpr(tpr=tar, method=method)
 
-    def threshold_at_frr(self, frr):
+    def threshold_at_frr(self, frr, *, method: str = "linear"):
         """
         Set threshold at False Rejection Rate
 
         Alias for :func:`~Scores.threshold_at_fnr`.
         """
-        return self.threshold_at_fnr(fnr=frr)
+        return self.threshold_at_fnr(fnr=frr, method=method)
 
-    def threshold_at_trr(self, trr):
+    def threshold_at_trr(self, trr, *, method: str = "linear"):
         """
         Set threshold at True Rejection Rate
 
         Alias for :func:`~Scores.threshold_at_tnr`.
         """
-        return self.threshold_at_tnr(tnr=trr)
+        return self.threshold_at_tnr(tnr=trr, method=method)
 
-    def threshold_at_far(self, far):
+    def threshold_at_far(self, far, *, method: str = "linear"):
         """
         Set threshold at False Acceptance Rate
 
         Alias for :func:`~Scores.threshold_at_fpr`.
         """
-        return self.threshold_at_fpr(fpr=far)
+        return self.threshold_at_fpr(fpr=far, method=method)
 
-    def threshold_at_acceptance_rate(self, acceptance_rate):
+    def threshold_at_acceptance_rate(self, acceptance_rate, *, method: str = "linear"):
         """
         Set threshold at Acceptance Rate
 
         Alias for :func:`~Scores.threshold_at_topr`.
         """
-        return self.threshold_at_topr(topr=acceptance_rate)
+        return self.threshold_at_topr(topr=acceptance_rate, method=method)
 
-    def threshold_at_rejection_rate(self, rejection_rate):
+    def threshold_at_rejection_rate(self, rejection_rate, *, method: str = "linear"):
         """
         Set threshold at Rejection Rate
 
         Alias for :func:`~Scores.threshold_at_tonr`.
         """
-        return self.threshold_at_tonr(tonr=rejection_rate)
+        return self.threshold_at_tonr(tonr=rejection_rate, method=method)
 
     def threshold_at_metric(
         self,
         target,
         metric: Union[str, Callable],
         points: Optional[Union[int, np.ndarray]] = None,
-    ):
+    ) -> List[np.ndarray]:
         """
         General function for setting thresholds at arbitrary metrics. No assumption is
         made about the metric being monotone or the threshold being unique.
 
         Given a metric function and a target value, the function will find all values
-        for the threshold such that metric(threshold) = target.
+        for the threshold such that ``metric(threshold) = target``.
 
-        If N = len(pos) + len(neg) is the number of scores and T = len(target) is the
-        number of thresholds we want to set, this function has complexity O(N*T),
+        If ``N = len(pos) + len(neg)`` is the number of scores and ``T = len(target)``
+        is the number of thresholds we want to set, this function has complexity O(N*T),
         because it searches over the whole score space to find all solutions. We can
         speed up the function by considering only a subset of points.
 
@@ -631,14 +710,14 @@ class Scores:
                 or a callable with signature::
 
                     metric(sample: Scores, threshold: np.ndarray) -> np.ndarray
-            points: If a scalar, we use this many linearly spaces scores between
-                min(pos, neg) and max(pos, neg). If given an array, we evaluate the
-                metric at exactly these points.
+            points: If a scalar, we use this many linearly spaced scores between
+                ``min(pos, neg)`` and ``max(pos, neg)``. If given an array, we evaluate
+                the metric at exactly these points.
 
         Returns:
-            A list threshold of the same length as target of arrays such that
-            threshold[j] is a strictly increasing array containing all solutions of the
-            equation metric(theta) = target[j].
+            A list of thresholds of the same length as ``target``, such that
+            ``threshold[j]`` is a strictly increasing array containing all solutions of
+            the equation ``metric(theta) = target[j]``.
         """
         if isinstance(metric, str):
             metric = getattr(type(self), metric)
@@ -669,8 +748,8 @@ class Scores:
         FAR = FRR).
 
         Returns:
-            Tuple (threshold, eer) consisting of the threshold at which EER is achieved
-            and the EER value.
+            Tuple ``(threshold, eer)``, consisting of the threshold at which EER is
+            achieved and the EER value itself.
         """
         # We treat the case of perfect separation separately
         if self.pos[0] >= self.neg[-1] and self.score_class == BinaryLabel.pos:
@@ -717,6 +796,57 @@ class Scores:
         threshold = self.threshold_at_fpr(eer)
 
         return threshold, eer
+
+    def auc(
+        self,
+        lower: float = 0.0,
+        upper: float = 1.0,
+        *,
+        x_axis: str = "fpr",
+        y_axis: str = "tpr",
+    ):
+        """
+        Computes the (partial) AUC for the given Scores object using the trapezoid
+        integration rule.
+
+        Args:
+            lower: Lower limit of integration.
+            upper: Upper limit of integration.
+            x_axis: Metric to plot on x-axis. Defaults to FPR.
+            y_axis: Metric to plot on y-axis. Defaults to TPR.
+        """
+        # We add +/-eps to each score to deal with continuity properties of the ROC
+        # curve. AUC is invariant to left-/right-continuity, but the metrics have
+        # varying continuity behaviour at the score values. Duplicating the scores
+        # makes the function slower, but it means that we don't have to figure out
+        # continuity properties by hand.
+        points = np.nextafter(
+            np.concatenate([self.pos, self.neg]), [[-np.inf], [np.inf]]
+        )
+        points = np.sort(points.flatten())
+
+        x = getattr(self, x_axis)(points)
+        y = getattr(self, y_axis)(points)
+
+        if x[-1] < x[0]:
+            x = x[::-1]
+            y = y[::-1]
+        left = np.searchsorted(x, lower, side="left")  # x[l - 1] < lower <= x[l]
+        right = np.searchsorted(x, upper, side="right")  # x[r - 1] <= upper < x[r]
+
+        # Ensure indices are in range
+        left = np.minimum(left, len(y) - 1)
+        right = np.maximum(right, 1)
+
+        x = np.concatenate([[lower], x[left:right], [upper]])
+        y = np.concatenate([[y[left]], y[left:right], [y[right - 1]]])
+
+        try:
+            trapezoid = np.trapezoid  # Only available in Numpy 2.x
+        except AttributeError:  # pragma: no cover
+            trapezoid = np.trapz  # Deprecated
+        # We use abs, so we don't have to worry about increasing/decreasing values.
+        return np.abs(trapezoid(y, x))
 
     @staticmethod
     def _find_root(f, xa, xe, find_first, xtol=1e-10) -> float:

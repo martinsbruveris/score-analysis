@@ -55,10 +55,6 @@ target-version = "py312"
 line-length = 88
 lint = { select = ["E", "F", "I"] }
 
-
-[tool.coverage.run]
-omit = ["score_analysis/experimental/*"]
-
 [build-system]
 requires = ["poetry>=0.12"]
 build-backend = "poetry.masonry.api"

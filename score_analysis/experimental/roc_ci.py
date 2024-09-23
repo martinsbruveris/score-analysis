@@ -1,10 +1,9 @@
-from dataclasses import dataclass
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 
 import numpy as np
 import scipy.stats
 
-from score_analysis import BinaryLabel, BootstrapConfig, Scores
+from score_analysis import BootstrapConfig, Scores
 from score_analysis.scores import DEFAULT_BOOTSTRAP_CONFIG
 from score_analysis.tools import (
     ROCCurve,
@@ -13,120 +12,6 @@ from score_analysis.tools import (
     _find_support_thresholds,
 )
 from score_analysis.utils import bootstrap_ci
-
-
-@dataclass
-class NormalDataset:
-    mu_pos: float
-    mu_neg: Optional[float] = None
-    sigma_pos: float = 3.75
-    sigma_neg: float = 3.0
-    p_pos: float = 0.5
-    n: Optional[int] = None
-    score_class: Union[BinaryLabel, str] = "pos"
-
-    def __post_init__(self):
-        if self.mu_neg is None:
-            self.mu_neg = -self.mu_pos
-
-    @staticmethod
-    def from_metrics(
-        fnr: float,
-        fpr: float,
-        fnr_support: int,
-        fpr_support: int,
-        sigma_pos: float = 1.0,
-        sigma_neg: float = 1.0,
-    ) -> "NormalDataset":
-        """
-        Generates a dataset with normally distributed scores, such that at
-        the threshold 0.0 we obtain the given FNR at FPR and there are
-        fnr_support and fpr_support many false negatives and false positives
-        respectively.
-        """
-
-        # We want P(X < 0) = fnr, where X ~ N(mu, si). We rewrite this as
-        #     P((X - mu) / si < -mu / si) = fnr
-        # and (X - mu) / si ~ N(0, 1), so -mu / si can be obtained as quantiles
-        # of N(0, 1).
-        mu_pos = -scipy.stats.norm.ppf(fnr) * sigma_pos
-        nb_pos = int(fnr_support / fnr)
-
-        # Similarly, we rewrite P(X < 0) = 1 - fpr as
-        #     P((X - mu) / si < -mu / si) = 1 - fpr
-        mu_neg = -scipy.stats.norm.ppf(1 - fpr) * sigma_neg
-        nb_neg = int(fpr_support / fpr)
-
-        n = nb_pos + nb_neg
-        p_pos = nb_pos / n
-
-        return NormalDataset(
-            mu_pos=mu_pos,
-            mu_neg=mu_neg,
-            sigma_pos=sigma_pos,
-            sigma_neg=sigma_neg,
-            p_pos=p_pos,
-            n=n,
-            score_class="pos",
-        )
-
-    def sample(
-        self, n: Optional[int] = None, *, p_pos: Optional[float] = None
-    ) -> Scores:
-        n = n if n is not None else self.n
-        p_pos = p_pos if p_pos is not None else self.p_pos
-        nb_pos = np.random.binomial(n, p_pos)
-        nb_neg = n - nb_pos
-        pos = np.random.normal(loc=self.mu_pos, scale=self.sigma_pos, size=nb_pos)
-        neg = np.random.normal(loc=self.mu_neg, scale=self.sigma_neg, size=nb_neg)
-        return Scores(pos=pos, neg=neg, score_class=self.score_class)
-
-    def roc(
-        self,
-        *,
-        fnr: Optional[np.ndarray] = None,
-        fpr: Optional[np.ndarray] = None,
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        if fnr is None and fpr is None:
-            raise ValueError("Must provide either FNR or FPR.")
-        if fnr is not None and fpr is not None:
-            raise ValueError("Cannot provide both FNR and FPR.")
-
-        if fnr is not None:
-            threshold = scipy.stats.norm.ppf(fnr, loc=self.mu_pos, scale=self.sigma_pos)
-        else:
-            # isf is the inverse survival function (sf = 1 - cdf)
-            threshold = scipy.stats.norm.isf(fpr, loc=self.mu_neg, scale=self.sigma_neg)
-
-        fnr = scipy.stats.norm.cdf(threshold, loc=self.mu_pos, scale=self.sigma_pos)
-        fpr = scipy.stats.norm.sf(threshold, loc=self.mu_neg, scale=self.sigma_neg)
-
-        return fnr, fpr
-
-    def threshold_at_fnr(self, fnr: np.ndarray) -> np.ndarray:
-        threshold = scipy.stats.norm.ppf(fnr, loc=self.mu_pos, scale=self.sigma_pos)
-        if np.isscalar(fnr):
-            threshold = threshold.item()
-        return threshold
-
-    def threshold_at_fpr(self, fpr: np.ndarray) -> np.ndarray:
-        # isf is the inverse survival function (sf = 1 - cdf)
-        threshold = scipy.stats.norm.isf(fpr, loc=self.mu_neg, scale=self.sigma_neg)
-        if np.isscalar(fpr):
-            threshold = threshold.item()
-        return threshold
-
-    def fnr(self, threshold: np.ndarray) -> np.ndarray:
-        fnr = scipy.stats.norm.cdf(threshold, loc=self.mu_pos, scale=self.sigma_pos)
-        if np.isscalar(threshold):
-            fnr = fnr.item()
-        return fnr
-
-    def fpr(self, threshold: np.ndarray) -> np.ndarray:
-        fpr = scipy.stats.norm.sf(threshold, loc=self.mu_neg, scale=self.sigma_neg)
-        if np.isscalar(threshold):
-            fpr = fpr.item()
-        return fpr
 
 
 def fixed_width_band_ci(

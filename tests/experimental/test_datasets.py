@@ -1,7 +1,11 @@
 import numpy as np
 import pytest
 
-from score_analysis.experimental import CorrelatedBernoullilDataset, NormalDataset
+from score_analysis.experimental import (
+    BernoulliDataset,
+    CorrelatedBernoullilDataset,
+    NormalDataset,
+)
 
 
 def test_normal_dataset():
@@ -30,6 +34,20 @@ def test_normal_dataset_from_metrics():
     )
     np.testing.assert_allclose(generator.fnr(0.0), 0.3)
     np.testing.assert_allclose(generator.fpr(0.0), 0.4)
+
+
+def test_bernoulli_dataset():
+    rng = np.random.default_rng(seed=42)
+    generator = BernoulliDataset(p=0.6)
+
+    data = generator.sample(n=10, random=False)
+    assert data.sum() == 6
+
+    data = generator.sample(n=1000, random=True, rng=rng)
+    assert abs(data.sum() - 600) <= 10
+
+    with pytest.raises(ValueError):
+        generator.sample()  # Not passing any n
 
 
 @pytest.mark.parametrize("rho", [0.0, 0.3])

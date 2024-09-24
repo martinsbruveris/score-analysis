@@ -129,6 +129,56 @@ class NormalDataset:
 
 
 @dataclass
+class BernoulliDataset:
+    """
+    Dataset of a single Bernoulli random variable.
+
+    Args:
+        p: Success probability.
+        n: Optional dataset size.
+    """
+
+    p: float
+    n: Optional[int] = None
+
+    def sample(
+        self,
+        n: Optional[int] = None,
+        *,
+        random: bool = True,
+        rng: Optional[np.random.Generator] = None,
+    ) -> np.ndarray:
+        """
+        Sample a dataset.
+
+        Args:
+            n: Dataset size. If not provided, we use the one specified in the class.
+            random: If False, we aim to have proportion of successes in the dataset to
+                be as close to ``p`` as possible. If True, we sample from a binomial
+                distribution with these parameters.
+            rng: Random number generator.
+
+        Returns:
+            Array of length n with elements 0 or 1.
+        """
+        n = n or self.n
+        if n is None:
+            raise ValueError("Dataset size n cannot be None.")
+        rng = rng or np.random.default_rng()
+
+        if random:
+            data = rng.binomial(1, self.p, size=n)
+        else:
+            pos = np.floor(n * self.p).astype(int)
+            neg = n - pos
+            data = np.repeat([0, 1], repeats=[neg, pos])
+            # The number of 0s and 1s is fixed, but the order is still random.
+            rng.shuffle(data)
+
+        return data
+
+
+@dataclass
 class CorrelatedBernoullilDataset:
     """
     Dataset of two bernoulli random variables with a fixed correlation coefficient.

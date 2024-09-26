@@ -18,30 +18,31 @@ pandas = "*"
 scipy = "*"
 tabulate = "*"
 
-# Documentation
-enum-tools = { version = "*", optional = true }
-sphinx = { version = "^5.0.0", optional = true }
-sphinx-rtd-theme = { version = "*", optional = true }
-sphinx-toolbox = { version = "^3.0.0", optional = true }
-
-# Jupyter
-jupyter = { version = "*", optional = true }
-matplotlib = { version = "*", optional = true }
-seaborn = { version = "*", optional = true }
-tqdm = { version = "*", optional = true }
-
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 bumpversion = "*"
 pytest = "*"
 pytest-cov = "*"
 ruff = "*"
 taskipy = "^1.13"
 
-[tool.poetry.extras]
-# To compile documentation
-docs = ["enum-tools", "sphinx", "sphinx-rtd-theme", "sphinx-toolbox"]
-# To work with jupyter notebooks
-jupyter = ["jupyter", "matplotlib", "seaborn", "tqdm"]
+[tool.poetry.group.docs.dependencies]
+enum-tools = "*"
+sphinx = "^5.0.0"
+sphinx-rtd-theme = "*"
+sphinx-toolbox = "^3.0.0"
+
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.jupyter.dependencies]
+jupyter = "*"
+matplotlib = "*"
+seaborn = "*"
+scikit-learn = "*"
+tqdm = "*"
+
+[tool.poetry.group.jupyter]
+optional = true
 
 [tool.taskipy.tasks]
 bumpversion = "poetry run bumpversion patch && git push && git push --tags"

@@ -4,7 +4,7 @@ import numpy as np
 import scipy.stats
 
 from score_analysis import BootstrapConfig, Scores
-from score_analysis.roc import (
+from score_analysis.roc_curve import (
     ROCCurve,
     _aggregate_rectangles,
     _apply_rule_of_three,

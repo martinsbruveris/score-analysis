@@ -1,9 +1,5 @@
 """
-This module contains tools that can be useful in various applications but are somewhat
-less fundamental than, e.g., the ConfusionMatrix class.
-
-We make fewer promises about the backwards compatibility of the functions in this
-module.
+This module contains ROC curve calculations, including confidence bands for ROC curves.
 """
 
 import math

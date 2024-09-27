@@ -5,7 +5,7 @@ import scipy.stats
 
 from score_analysis import BootstrapConfig, Scores
 from score_analysis.scores import DEFAULT_BOOTSTRAP_CONFIG
-from score_analysis.tools import (
+from score_analysis.roc import (
     ROCCurve,
     _aggregate_rectangles,
     _apply_rule_of_three,

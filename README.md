@@ -177,7 +177,7 @@ Overall metrics
 
 ### Confidence intervals
 
-The library implements bootstrapping to compute confidence intervals for arbirtrary
+The library implements bootstrapping to compute confidence intervals for arbitrary
 (vectorized) measurements. It allows us to compute confidence intervals for arbitrary
 functions
 
@@ -368,7 +368,7 @@ which should result in a table like this:
 Before submitting an MR, please run
 
 ```shell
-poetry run task check_style
+poetry run task check-style
 ```
 
 and if necessary run:
@@ -389,9 +389,3 @@ make test
  * `# fmt: skip` for disabling formatting on a single line.
  * `# fmt: off` / `# fmt: on` for disabling formatting on a block of code.
  * `# noqa: F401` to disable flake8 warning of unused import
-
-## Future plans
-
-The following features are planned
-
-- [ ] Aliases for metrics

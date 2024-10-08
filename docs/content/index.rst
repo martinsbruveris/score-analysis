@@ -240,5 +240,5 @@ consistent handling of matrix shapes.
     score_analysis/group_scores
     score_analysis/scores
     score_analysis/metrics
-    score_analysis/tools
+    score_analysis/roc_curve
     score_analysis/utils

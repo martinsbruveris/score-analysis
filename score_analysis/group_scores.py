@@ -3,12 +3,12 @@ The :class:`GroupScores` class is an extension of the :class:`.Scores` class to 
 keep track of group membership.
 
  * We only support one group. To perform analysis with respect to multiple groups
-   simultaneously, one can create a new group variable that combines both original
-   group.
- * All per-group metric functions will return arrays with G as the first dimension,
-   where G is the number of different groups. We can use ``GroupScores.groups`` to
-   correlate the array indices with group names. Arrays will play nicely with the
-   existing vectorisation features in the library.
+   simultaneously, one can create a new group variable that combines all original
+   groups.
+ * All per-group metric functions will return arrays with :math:`G` as the first
+   dimension, where :math:`G` is the number of different groups. We can use
+   ``GroupScores.groups`` to correlate the array indices with group names. Arrays will
+   play nicely with the existing vectorisation features in the library.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from .scores import (
 def groupwise(metric) -> Callable[..., np.ndarray]:
     """
     Converts a metric to a group-wise metric. A metric is can be a string indicating a
-    member function of the `:class:`.Scores` class or a callable with signature::
+    member function of the :class:`.Scores` class or a callable with signature::
 
         metric(sample: Scores, **kwargs) -> np.ndarray
 
@@ -43,7 +43,8 @@ def groupwise(metric) -> Callable[..., np.ndarray]:
 
         groupwise_metric(sample: GroupScores, **kwargs) -> np.ndarray
 
-    returning an array of shape (G, Y), where metric returns an array of shape (Y,).
+    returning an array of shape :math:`(G, Y)`, where :math:`G` is the number of groups
+    and metric returns an array of shape :math:`Y`.
     """
     if isinstance(metric, str):
         metric = getattr(Scores, metric)

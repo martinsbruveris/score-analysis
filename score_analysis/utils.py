@@ -1,5 +1,5 @@
 """
-This module contains internal utility functions.
+This module contains various utility functions used elsewhere in the library.
 """
 
 from typing import List, Optional, Union
@@ -10,16 +10,16 @@ import scipy.stats
 
 def binomial_ci(count: np.ndarray, nobs: np.ndarray, alpha: float = 0.05):
     """
-    Confidence interval for binomial proportions.
+    Confidence interval for binomial proportions using the normal approximation.
 
     Args:
-        count: Number of successes of shape (...)
-        nobs: Number of trials of shape (...)
+        count: Number of successes of shape (X,).
+        nobs: Number of trials of shape (X,).
         alpha: Significance level. In range (0, 1)
 
     Returns:
-        np.ndarray of shape (..., 2). Lower and upper limits of confidence interval
-        with coverage 1-alpha.
+        np.ndarray of shape (X, 2). Lower and upper limits of confidence interval with
+        coverage 1-alpha.
     """
     nans = np.full_like(count, np.nan, dtype=float)
     p = np.divide(count, nobs, out=nans, where=nobs != 0)
@@ -61,8 +61,8 @@ def bootstrap_ci(
               empirical metric distribution.
             * "bc" applies bias correction to correct for the bias of the median
               of the empirical distribution
-            * "bca" applies bias correction and acceleration to correct for non-
-              constant standard error.
+            * "bca" applies bias correction and acceleration to correct for
+              non-constant standard error.
 
             See Ch. 11 of Computer Age Statistical Inference by Efron and Hastie
             for details.
@@ -141,21 +141,27 @@ def bootstrap_ci(
 
 
 def invert_pl_function(x: np.ndarray, y: np.ndarray, t: np.ndarray) -> List[np.ndarray]:
-    r"""
+    """
     Inverts piecewise linear function.
 
-    The points (x[i], y[i]) define the function is given by f(x[i]) = y[i] with
-    piecewise linear interpolation in between. We assume that x is an increasing
-    vector, i.e., x[i] <= x[i+1]; x does not have to be strictly increasing, but
-    if x[i] = x[i+1], then we assume that also y[i] = y[i+1].
+    The piecewise linear function  :math:`f(x_i) = y_i` is defined the by the sequence
+    of points :math:`(x_i, y_i)`. We assume that :math:`x` is an increasing
+    vector, i.e., :math:`x_i \leq x_{i+1}`; the vector :math:`x` does not have to be
+    strictly increasing, but if :math:`x_i = x_{i+1}`, then we assume that also
+    :math:`y_i = y_{i+1}`.
 
-    The function finds all values s[j], such that f(s[j]) = t[j]. Because the number
-    of solutions can vary for different t[j], we return a list of the same length
-    as t, not an array.
+    For a given target value :math:`t_j`, the function finds all values
+    :math:`s_{j, k}`, such that :math:`f(s_{j, k}) = t_j`. Because the number
+    of solutions can vary for different :math:`t_j`, the return type for :math:`s`
+    is a list of the same length as :math:`t` with each entry an array.
 
-    If the equation f(z) = t[j] has no solution, we return the closest point s[j],
-    i.e., \|f(s[j]) - t[j]\| = min_z \|f(z) - t[j]\|. We always return only one solution
-    in this case.
+    If the equation :math:`f(s) = t_j` has no solution, we return the closest point
+    :math:`s_j`, i.e.,
+
+    .. math::
+
+        \|f(s_j) - t_j\| = \min_z \|f(z) - t_j\|\,.
+    We always return only one solution in this case.
 
     Args:
          x: Increasing vector of points defining the function.
@@ -163,8 +169,9 @@ def invert_pl_function(x: np.ndarray, y: np.ndarray, t: np.ndarray) -> List[np.n
          t: Vector of points at which to invert the function.
 
     Returns:
-        A list s of the same length as t of arrays such that s[j] is a strictly
-        increasing array containing all solutions of the equation f(z) = t[j].
+        A list :math:`s` of the same length as :math:`t` of arrays such that for all
+        :math:`j`, the array :math:`s_j` is strictly increasing and contains all
+        solutions of the equation :math:`f(s) = t_j`.
     """
     x = np.asarray(x)
     y = np.asarray(y)

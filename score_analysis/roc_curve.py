@@ -15,6 +15,7 @@ from .scores import DEFAULT_BOOTSTRAP_CONFIG, BootstrapConfig, Scores
 class ROCCurve:
     fnr: np.ndarray
     fpr: np.ndarray
+    thresholds: np.ndarray
     fnr_ci: Optional[np.ndarray] = None
     fpr_ci: Optional[np.ndarray] = None
 
@@ -67,7 +68,7 @@ def roc(
     fnr = scores.fnr(thresholds)
     fpr = scores.fpr(thresholds)
 
-    return ROCCurve(fnr=fnr, fpr=fpr)
+    return ROCCurve(fnr=fnr, fpr=fpr, thresholds=thresholds)
 
 
 def roc_with_ci(
@@ -129,7 +130,9 @@ def roc_with_ci(
     fpr_band = _aggregate_rectangles(fnr, fnr_ci, fpr_ci)
     fnr_band = _aggregate_rectangles(fpr, fpr_ci, fnr_ci)
 
-    return ROCCurve(fnr=fnr, fpr=fpr, fnr_ci=fnr_band, fpr_ci=fpr_band)
+    return ROCCurve(
+        fnr=fnr, fpr=fpr, thresholds=thresholds, fnr_ci=fnr_band, fpr_ci=fpr_band
+    )
 
 
 def _find_support_thresholds(

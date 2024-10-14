@@ -83,7 +83,9 @@ def fixed_width_band_ci(
     fpr_ci = [np.interp(fnr, fnr_minus, fpr_minus), np.interp(fnr, fnr_plus, fpr_plus)]
     fpr_ci = np.stack(fpr_ci, axis=-1)
 
-    return ROCCurve(fnr=fnr, fpr=fpr, fnr_ci=fnr_ci, fpr_ci=fpr_ci)
+    return ROCCurve(
+        fnr=fnr, fpr=fpr, thresholds=thresholds, fnr_ci=fnr_ci, fpr_ci=fpr_ci
+    )
 
 
 def _displace_curve(
@@ -154,7 +156,7 @@ def simultaneous_joint_region_ci(
     nb_points: Optional[int] = None,
     alpha: float = 0.05,
     config: BootstrapConfig = DEFAULT_BOOTSTRAP_CONFIG,
-):
+) -> ROCCurve:
     """
     Simultaneous Joint Confidence Region (SJR) method to estimate CI bands from
     Campbell 1994. This was one of the benchmark methods in Macskassy et al. 2005.
@@ -198,7 +200,9 @@ def simultaneous_joint_region_ci(
     fpr_band = _aggregate_rectangles(fnr, fnr_ci, fpr_ci)
     fnr_band = _aggregate_rectangles(fpr, fpr_ci, fnr_ci)
 
-    return ROCCurve(fnr=fnr, fpr=fpr, fnr_ci=fnr_band, fpr_ci=fpr_band)
+    return ROCCurve(
+        fnr=fnr, fpr=fpr, thresholds=thresholds, fnr_ci=fnr_band, fpr_ci=fpr_band
+    )
 
 
 def pointwise_band_ci(
@@ -210,7 +214,7 @@ def pointwise_band_ci(
     nb_points: Optional[int] = None,
     alpha: float = 0.05,
     config: BootstrapConfig = DEFAULT_BOOTSTRAP_CONFIG,
-):
+) -> ROCCurve:
     """
     Method that aggregates pointwise CI intervals into a confidence band. This is
     essentially the same as ``roc_with_ci``, except that we don't do aggregation of
@@ -251,4 +255,6 @@ def pointwise_band_ci(
     fnr_ci = _apply_rule_of_three(p=fnr, ci=fnr_ci, alpha=alpha, n=len(scores.pos))
     fpr_ci = _apply_rule_of_three(p=fpr, ci=fpr_ci, alpha=alpha, n=len(scores.neg))
 
-    return ROCCurve(fnr=fnr, fpr=fpr, fnr_ci=fnr_ci, fpr_ci=fpr_ci)
+    return ROCCurve(
+        fnr=fnr, fpr=fpr, thresholds=thresholds, fnr_ci=fnr_ci, fpr_ci=fpr_ci
+    )

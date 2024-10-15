@@ -1,7 +1,15 @@
 import numpy as np
 import pytest
 
+from score_analysis import BinaryLabel
 from score_analysis.scores import BootstrapConfig, Scores, pointwise_cm
+
+
+def test_binary_label_eq():
+    assert BinaryLabel("pos") == "pos"
+    assert BinaryLabel("pos") != "neg"
+    with pytest.raises(ValueError):
+        BinaryLabel("neg") == "no_such_value"
 
 
 def test_from_labels():

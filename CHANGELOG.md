@@ -4,6 +4,8 @@
 
 - Introduced dataclass `ROCCurve` for return values of `roc` and `roc_with_ci`.
 - Renamed `tools.py` to `roc.py`.
+- Revised support point selection when computing ROC curve and ROC curve with 
+  confidence bands.
 
 ## v0.2.3 - 2024-04-08
 

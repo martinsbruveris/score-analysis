@@ -38,6 +38,7 @@ optional = true
 dataframe-image = "*"
 jupyter = "*"
 matplotlib = "*"
+multiprocess = "*"
 seaborn = "*"
 scikit-learn = "*"
 tqdm = "*"

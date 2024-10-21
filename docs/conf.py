@@ -59,6 +59,12 @@ autodoc_typehints = "description"
 # Show both the class docstring and the __init__ docstring
 autoclass_content = "both"
 
+# Otherwise autodoc expands the definition of typehints
+autodoc_type_aliases = {
+    "Iterable": "Iterable",
+    "ArrayLike": "ArrayLike",
+}
+
 
 # -- Options for HTML output -------------------------------------------------
 

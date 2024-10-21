@@ -2,86 +2,168 @@
 This module contains ROC curve calculations, including confidence bands for ROC curves.
 """
 
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
+from numpy.typing import ArrayLike
 
-from .scores import DEFAULT_BOOTSTRAP_CONFIG, BootstrapConfig, Scores
+from .scores import DEFAULT_BOOTSTRAP_CONFIG, BinaryLabel, BootstrapConfig, Scores
+
+ROC_CI_EXTRA_POINTS = 20  # Number of points added for ROC confidence band computations
 
 
 @dataclass
 class ROCCurve:
+    """
+    Class to hold the values and thresholds for an ROC curve, optionally with
+    confidence bands.
+
+    Args:
+        fnr: False Negative Rate.
+        fpr: False Positive Rate.
+        thresholds: Thresholds.
+        fnr_ci: (N, 2) array with FNR confidence bands.
+        fpr_ci: (N, 2) array with FPR confidence bands.
+    """
+
     fnr: np.ndarray
     fpr: np.ndarray
+    thresholds: np.ndarray
     fnr_ci: Optional[np.ndarray] = None
     fpr_ci: Optional[np.ndarray] = None
 
     @property
     def tpr(self):
+        """True Positive Rate"""
         return 1.0 - self.fnr
 
     @property
     def tnr(self):
+        """True Negative Rate"""
         return 1.0 - self.fpr
 
     @property
+    def frr(self):
+        """False Rejection Rate (alias for FNR)"""
+        return self.fnr
+
+    @property
+    def far(self):
+        """False Acceptance Rate (alias for FPR)"""
+        return self.fpr
+
+    @property
+    def tar(self):
+        """True Acceptance Rate (alias for TPR)"""
+        return self.tpr
+
+    @property
+    def trr(self):
+        """True Rejection Rate (alias for TNR)"""
+        return self.tnr
+
+    @property
     def tpr_ci(self):
+        """TPR CIs"""
         return None if self.fnr_ci is None else np.copy(1.0 - self.fnr_ci[..., ::-1])
 
     @property
     def tnr_ci(self):
+        """TNR CIs"""
         return None if self.fpr_ci is None else np.copy(1.0 - self.fpr_ci[..., ::-1])
+
+    @property
+    def frr_ci(self):
+        """FRR CIs (alias for FNR CIs)"""
+        return self.fnr_ci
+
+    @property
+    def far_ci(self):
+        """FAR CIs (alias for FPR CIs)"""
+        return self.fpr_ci
+
+    @property
+    def tar_ci(self):
+        """TAR CIs (Alias for FPR CIs)"""
+        return self.tpr_ci
+
+    @property
+    def trr_ci(self):
+        """TRR CIs (alias for TNR CIs)"""
+        return self.tnr_ci
 
 
 def roc(
     scores: Scores,
     *,
-    fnr: Optional[np.ndarray] = None,
-    fpr: Optional[np.ndarray] = None,
-    thresholds: Optional[np.ndarray] = None,
-    nb_points: int = 100,
+    fnr: Optional[ArrayLike] = None,
+    fpr: Optional[ArrayLike] = None,
+    thresholds: Optional[ArrayLike] = None,
+    nb_points: Optional[int] = 100,
+    x_axis: str = "fpr",
 ) -> ROCCurve:
-    """Compute the ROC curve at the given FNR, FPR or threshold values."""
-    if thresholds is None:
-        thresholds = np.zeros(shape=(0,))
-    if fnr is not None:
-        fnr_thresholds = scores.threshold_at_fnr(fnr)
-        thresholds = np.concatenate([thresholds, fnr_thresholds])
-    if fpr is not None:
-        fpr_thresholds = scores.threshold_at_fpr(fpr)
-        thresholds = np.concatenate([thresholds, fpr_thresholds])
-    if len(thresholds) == 0:
-        nb_fnr_points = nb_points // 2
-        nb_fpr_points = nb_points - nb_fnr_points
-        default_fnr = np.linspace(0.0, 1.0, nb_fnr_points, endpoint=True)
-        fnr_thresholds = scores.threshold_at_fnr(default_fnr)
+    """
+    Computes the ROC curve at the given FNR, FPR or threshold values.
 
-        default_fpr = np.linspace(0.0, 1.0, nb_fpr_points, endpoint=True)
-        fpr_thresholds = scores.threshold_at_fpr(default_fpr)
-        thresholds = np.concatenate([fnr_thresholds, fpr_thresholds])
+    We can provide the FNR, FPR and threshold values at which to compute the ROC
+    curve. We will use the union of these points for the ROC curve.
 
-        thresholds = np.sort(thresholds)
+    If neither FNR, FPR, nor threshold values are provided, if ``nb_points`` is set,
+    we use linearly spaced points between the smallest positive and negative scores.
+
+    If ``nb_points`` is None, we use *all* positive and negative scores for the
+    ROC curve. This gives the highest accuracy, but can be compute-intensive if we
+    are working with large amount of scores.
+
+    Args:
+        scores: Scores for which to compute ROC curve.
+        fnr: FNR points at which to compute the ROC curve.
+        fpr: FPR points at which to compute the ROC curve.
+        thresholds: Thresholds at which to compute the ROC curve.
+        nb_points: Number of linearly spaced points to use, if neither one of FNR, FPR,
+            nor thresholds are provided. If None, we use all scores for the ROC curve.
+        x_axis: The values for x-axis metric will be increasing.
+
+    Returns:
+        A ROCCurve object with points on the ROC curve and the corresponding thresholds.
+    """
+    thresholds = _find_support_thresholds(
+        scores, fnr, fpr, thresholds, nb_points, None, x_axis
+    )
 
     fnr = scores.fnr(thresholds)
     fpr = scores.fpr(thresholds)
 
-    return ROCCurve(fnr=fnr, fpr=fpr)
+    return ROCCurve(fnr=fnr, fpr=fpr, thresholds=thresholds)
 
 
 def roc_with_ci(
     scores: Scores,
     *,
-    fnr: Optional[np.ndarray] = None,
-    fpr: Optional[np.ndarray] = None,
-    thresholds: Optional[np.ndarray] = None,
+    fnr: Optional[ArrayLike] = None,
+    fpr: Optional[ArrayLike] = None,
+    thresholds: Optional[ArrayLike] = None,
     nb_points: Optional[int] = None,
+    x_axis: str = "fpr",
     alpha: float = 0.05,
     config: BootstrapConfig = DEFAULT_BOOTSTRAP_CONFIG,
 ) -> ROCCurve:
     """
-    Function to compute the confidence band around a ROC curve.
+    Function to compute the confidence band around an ROC curve.
+
+    We can provide the FNR, FPR and threshold values at which to compute the ROC
+    curve. We will use the union of these points for the ROC curve.
+
+    If neither FNR, FPR, nor threshold values are provided, if ``nb_points`` is set,
+    we use linearly spaced points between the smallest positive and negative scores.
+
+    If ``nb_points`` is None, we use *all* positive and negative scores for the
+    ROC curve. This gives the highest accuracy, but can be compute-intensive if we
+    are working with large amount of scores.
 
     There are two ways to plot an ROC curve, depending on which metric (FPR or FNR) ir
     plotted on the x-axis. We expect the user to provide either FPR or FNR values (but
@@ -98,6 +180,7 @@ def roc_with_ci(
             additional number of support points beyond the range of the specified
             points. If none of fnr, fpr or threshold are provided, we use this number
             of support points linearly spaced along the FNR and FPR axes.
+        x_axis: The values for x-axis metric will be increasing.
         alpha: Significance level. In range (0, 1).
         config: Bootstrap config.
 
@@ -106,7 +189,13 @@ def roc_with_ci(
         bounds of the confidence band values for both metric values.
     """
     thresholds = _find_support_thresholds(
-        scores=scores, fnr=fnr, fpr=fpr, thresholds=thresholds, nb_points=nb_points
+        scores,
+        fnr,
+        fpr,
+        thresholds,
+        nb_points,
+        ROC_CI_EXTRA_POINTS,
+        x_axis,
     )
     fnr = scores.fnr(thresholds)
     fpr = scores.fpr(thresholds)
@@ -129,7 +218,9 @@ def roc_with_ci(
     fpr_band = _aggregate_rectangles(fnr, fnr_ci, fpr_ci)
     fnr_band = _aggregate_rectangles(fpr, fpr_ci, fnr_ci)
 
-    return ROCCurve(fnr=fnr, fpr=fpr, fnr_ci=fnr_band, fpr_ci=fpr_band)
+    return ROCCurve(
+        fnr=fnr, fpr=fpr, thresholds=thresholds, fnr_ci=fnr_band, fpr_ci=fpr_band
+    )
 
 
 def _find_support_thresholds(
@@ -138,61 +229,101 @@ def _find_support_thresholds(
     fpr: Optional[np.ndarray],
     thresholds: Optional[np.ndarray],
     nb_points: Optional[int],
+    nb_extra_points: Optional[int],
+    x_axis: str,
 ) -> np.ndarray:
-    if fnr is None and fpr is None and thresholds is None:
-        default_nb_points = 100
+    """
+    This function contains the logic for combining the user-provided FNR, FPR, and
+    threshold values, together with nb_points to one list of thresholds at which
+    we will evaluate the ROC curve.
+
+    If one of FNR, FPR or thresholds is provided, we use the union of thresholds
+    corresponding to these values. In that case nb_points is ignored.
+
+    If FNR, FPR and thresholds are all None, we use thresholds corresponding to
+    linearly spaced points along FNR and FPR axes. To be precise, we use nb_points // 2
+    points along the FNR axis and the same along the FPR axis.
+    """
+    if nb_extra_points is not None:
+        # We subtract 4 to make space for thresholds beyond the pos and neg score
+        # limits; see np.nextafter calls below.
+        nb_extra_fnr_points = (nb_extra_points - 4) // 2
+        nb_extra_fpr_points = nb_extra_points - 4 - nb_extra_fnr_points
     else:
-        default_nb_points = 20
-    nb_points = nb_points or default_nb_points
-
-    # We subtract 4 to make space for thresholds beyond the pos and neg score limits;
-    # see np.nextafter calls below. These are number of points in addition to those
-    # provided by the user in fnr and fpr parameters.
-    nb_fnr_points = (nb_points - 4) // 2
-    nb_fpr_points = nb_points - 4 - nb_fnr_points
-
-    fnr_init = _combine_support_points(fnr, nb_fnr_points)
-    fnr_thresholds = np.concatenate(
-        [
-            scores.threshold_at_fnr(fnr_init),
-            # Add thresholds that are smaller and larger than all scores
-            [np.nextafter(scores.pos[0], -np.inf)],
-            [np.nextafter(scores.pos[-1], np.inf)],
-        ]
-    )
-
-    fpr_init = _combine_support_points(fpr, nb_fpr_points)
-    fpr_thresholds = np.concatenate(
-        [
-            scores.threshold_at_fpr(fpr_init),
-            # Add thresholds that are smaller and larger than all scores
-            [np.nextafter(scores.neg[0], -np.inf)],
-            [np.nextafter(scores.neg[-1], np.inf)],
-        ]
-    )
+        nb_extra_fnr_points = 0
+        nb_extra_fpr_points = 0
 
     if thresholds is None:
         thresholds = np.zeros(shape=(0,))
-    thresholds = np.concatenate([fnr_thresholds, fpr_thresholds, thresholds])
+    if fnr is not None:
+        fnr_thresholds = scores.threshold_at_fnr(fnr)
+        thresholds = np.concatenate([thresholds, fnr_thresholds])
+    if fpr is not None:
+        fpr_thresholds = scores.threshold_at_fpr(fpr)
+        thresholds = np.concatenate([thresholds, fpr_thresholds])
+    if len(thresholds) == 0:
+        if nb_points is None:
+            # Use all available scores as thresholds
+            thresholds = np.concatenate([scores.pos, scores.neg])
+        else:
+            nb_fnr_points = nb_points // 2
+            nb_fpr_points = nb_points - nb_fnr_points
+            default_fnr = np.linspace(0.0, 1.0, nb_fnr_points, endpoint=True)
+            fnr_thresholds = scores.threshold_at_fnr(default_fnr)
+
+            default_fpr = np.linspace(0.0, 1.0, nb_fpr_points, endpoint=True)
+            fpr_thresholds = scores.threshold_at_fpr(default_fpr)
+            thresholds = np.concatenate([fnr_thresholds, fpr_thresholds])
+
+    if nb_extra_points is not None:
+        thresholds = np.sort(thresholds)
+
+        fnr_min = np.min(scores.fnr(thresholds[[0, -1]]))
+        fnr_max = np.max(scores.fnr(thresholds[[0, -1]]))
+        fnr_extra = _add_extra_points(fnr_min, fnr_max, nb_extra_fnr_points)
+        fnr_thresholds = scores.threshold_at_fnr(fnr_extra)
+
+        fpr_min = np.min(scores.fpr(thresholds[[0, -1]]))
+        fpr_max = np.max(scores.fpr(thresholds[[0, -1]]))
+        fpr_extra = _add_extra_points(fpr_min, fpr_max, nb_extra_fpr_points)
+        fpr_thresholds = scores.threshold_at_fpr(fpr_extra)
+
+        thresholds = np.concatenate([thresholds, fnr_thresholds, fpr_thresholds])
+        thresholds = np.concatenate(
+            [
+                thresholds,
+                # Add thresholds that are smaller and larger than all scores
+                [np.nextafter(scores.pos[0], -np.inf)],
+                [np.nextafter(scores.pos[-1], np.inf)],
+                [np.nextafter(scores.neg[0], -np.inf)],
+                [np.nextafter(scores.neg[-1], np.inf)],
+            ]
+        )
+
     thresholds = np.sort(thresholds)
-    if scores.score_class == "neg":
-        thresholds = thresholds[::-1]  # We want FNR to be increasing
+    if x_axis not in {"fnr", "fpr", "tnr", "tpr", "far", "frr", "tar", "trr"}:
+        raise ValueError(f"Unknown value for x_axis: {x_axis}.")
+    if x_axis in {"fpr", "tpr", "far", "tar"}:  # Decreasing metrics if score_class=pos
+        thresholds = thresholds[::-1]
+    if scores.score_class == BinaryLabel.neg:
+        thresholds = thresholds[::-1]
 
     return thresholds
 
 
-def _combine_support_points(x: Optional[np.ndarray], nb_points: int) -> np.ndarray:
-    if x is None:
-        return np.linspace(0.0, 1.0, num=nb_points, endpoint=True)
-
-    x = np.sort(x)
+def _add_extra_points(x_min, x_max, nb_points: int) -> np.ndarray:
     nb_before = nb_points // 2
     nb_after = nb_points - nb_before
-    if x[0] > 0.0:
-        x_before = np.linspace(0.0, x[0], num=nb_before, endpoint=False)
+    x = np.array([])
+    if x_min > 0.0:
+        print("WAA")
+        x_before = np.linspace(0.0, x_min, num=nb_before, endpoint=False)
         x = np.concatenate([x_before, x])
-    if x[-1] < 1.0:
-        x_after = np.linspace(1.0, x[-1], num=nb_after, endpoint=False)
+    if x_max < 1.0:
+        print("WOOO")
+        # Thresholds will be sorted later. We use the reverse order to take advantage
+        # of endpoint=False to exclude x[-1].
+        x_after = np.linspace(1.0, x_max, num=nb_after, endpoint=False)
         x = np.concatenate([x, x_after])
     return x
 

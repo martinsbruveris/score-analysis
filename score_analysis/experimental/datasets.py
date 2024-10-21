@@ -92,15 +92,19 @@ class NormalDataset:
             raise ValueError("Cannot provide both FNR and FPR.")
 
         if fnr is not None:
-            threshold = scipy.stats.norm.ppf(fnr, loc=self.mu_pos, scale=self.sigma_pos)
+            thresholds = scipy.stats.norm.ppf(
+                fnr, loc=self.mu_pos, scale=self.sigma_pos
+            )
         else:
             # isf is the inverse survival function (sf = 1 - cdf)
-            threshold = scipy.stats.norm.isf(fpr, loc=self.mu_neg, scale=self.sigma_neg)
+            thresholds = scipy.stats.norm.isf(
+                fpr, loc=self.mu_neg, scale=self.sigma_neg
+            )
 
-        fnr = scipy.stats.norm.cdf(threshold, loc=self.mu_pos, scale=self.sigma_pos)
-        fpr = scipy.stats.norm.sf(threshold, loc=self.mu_neg, scale=self.sigma_neg)
+        fnr = scipy.stats.norm.cdf(thresholds, loc=self.mu_pos, scale=self.sigma_pos)
+        fpr = scipy.stats.norm.sf(thresholds, loc=self.mu_neg, scale=self.sigma_neg)
 
-        return ROCCurve(fnr=fnr, fpr=fpr)
+        return ROCCurve(fnr=fnr, fpr=fpr, thresholds=thresholds)
 
     def threshold_at_fnr(self, fnr: np.ndarray) -> np.ndarray:
         threshold = scipy.stats.norm.ppf(fnr, loc=self.mu_pos, scale=self.sigma_pos)

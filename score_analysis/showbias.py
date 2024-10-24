@@ -140,8 +140,11 @@ def showbias(
         )
 
     if "threshold" in metric_kwargs:
-        if not isinstance(metric_kwargs["threshold"], list):
-            metric_kwargs["threshold"] = [metric_kwargs["threshold"]]
+        threshold = metric_kwargs["threshold"]
+        if isinstance(threshold, (int, float)):  # Scalar case
+            metric_kwargs["threshold"] = [threshold]
+        elif isinstance(threshold, np.ndarray):  # Numpy array case
+            metric_kwargs["threshold"] = threshold.tolist()
 
     score_object = GroupScores.from_labels(
         scores=data[score_column].values,

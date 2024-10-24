@@ -139,6 +139,10 @@ def showbias(
             f"Got unexpected type {type(group_columns)} value for `group_columns`"
         )
 
+    if "threshold" in metric_kwargs:
+        if not isinstance(metric_kwargs["threshold"], list):
+            metric_kwargs["threshold"] = [metric_kwargs["threshold"]]
+
     score_object = GroupScores.from_labels(
         scores=data[score_column].values,
         labels=data[label_column].values,

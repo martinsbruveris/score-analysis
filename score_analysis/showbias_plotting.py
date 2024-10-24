@@ -10,7 +10,7 @@ from score_analysis import BiasFrame
 
 def plot_single_threshold(
     bias_frame: BiasFrame, threshold: float, title: Optional[str] = None
-) -> plt:
+) -> plt.Figure:
     """
     Plots the observed values at a specific threshold, optionally with their
     confidence intervals if they are available.
@@ -32,7 +32,7 @@ def plot_single_threshold(
             threshold. Defaults to None.
 
     Returns:
-        A matplotlib plot object displaying the observed values at a specific
+        A matplotlib Figure object displaying the observed values at a specific
         threshold, with error bars for confidence intervals if available.
     """
     sns.set(style="whitegrid")
@@ -101,12 +101,12 @@ def plot_single_threshold(
     )
     plt.title(title, fontsize=16)
     plt.tight_layout()
-    return plt
+    return plt.gcf()
 
 
 def plot_multiple_thresholds(
     bias_frame, log_scale: bool = False, title: Optional[str] = None
-) -> plt:
+) -> plt.Figure:
     """
     Plots metric values for different groups across a range of thresholds,
     optionally with their confidence intervals.
@@ -125,7 +125,7 @@ def plot_multiple_thresholds(
             intervals are included in the plot.
 
     Returns:
-        A matplotlib plot object visualizing metric values for different groups across
+        A matplotlib Figure object visualizing metric values for different groups across
         a range of thresholds, with shaded areas representing confidence intervals if
         available.
     """
@@ -160,4 +160,4 @@ def plot_multiple_thresholds(
     if log_scale:
         plt.xscale("log")
         plt.yscale("log")
-    return plt
+    return plt.gcf()

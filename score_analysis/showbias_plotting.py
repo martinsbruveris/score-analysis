@@ -9,7 +9,10 @@ from score_analysis import BiasFrame
 
 
 def plot_single_threshold(
-    bias_frame: BiasFrame, threshold: float, title: Optional[str] = None
+    bias_frame: BiasFrame,
+    threshold: float,
+    title: Optional[str] = None,
+    ax: Optional[plt.Axes] = None,
 ) -> plt.Figure:
     """
     Plots the observed values at a specific threshold, optionally with their
@@ -30,16 +33,22 @@ def plot_single_threshold(
         title: Custom title for the plot. If not provided, a default title is
             generated that includes the DataFrame's index name and the specified
             threshold. Defaults to None.
+        ax: A Matplotlib Axes object. If provided, the plot will be drawn on this
+            Axes. If None, a new Figure and Axes will be created.
 
     Returns:
         A matplotlib Figure object displaying the observed values at a specific
         threshold, with error bars for confidence intervals if available.
     """
     sns.set(style="whitegrid")
-    plt.figure(figsize=(10, 6))
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 6))
+    else:
+        fig = ax.get_figure()
 
     if bias_frame.lower is None and bias_frame.upper is None:
-        plt.scatter(
+        ax.scatter(
             bias_frame.values[threshold],
             (
                 [" x ".join(item) for item in bias_frame.values.index]
@@ -62,7 +71,7 @@ def plot_single_threshold(
                 - bias_frame.values[threshold].values,
             )
         )
-        plt.errorbar(
+        ax.errorbar(
             bias_frame.values[threshold],
             bias_frame.values.index,
             xerr=error_bars,
@@ -81,9 +90,9 @@ def plot_single_threshold(
             (bias_frame.values[threshold] + error_bars[1]).max(),
         )
 
-    plt.xlim(0, max_value * 1.1)
-    plt.xlabel("Metric values")
-    plt.ylabel(bias_frame.values.index.name)
+    ax.set_xlim(0, max_value * 1.1)
+    ax.set_xlabel("Metric values")
+    ax.set_ylabel(bias_frame.values.index.name)
     title_with_ci = (
         ""
         if bias_frame.lower is None and bias_frame.upper is None
@@ -99,13 +108,16 @@ def plot_single_threshold(
         if title is None
         else title
     )
-    plt.title(title, fontsize=16)
-    plt.tight_layout()
-    return plt.gcf()
+    ax.set_title(title, fontsize=16)
+    fig.tight_layout()
+    return fig
 
 
 def plot_multiple_thresholds(
-    bias_frame, log_scale: bool = False, title: Optional[str] = None
+    bias_frame,
+    log_scale: bool = False,
+    title: Optional[str] = None,
+    ax: Optional[plt.Axes] = None,
 ) -> plt.Figure:
     """
     Plots metric values for different groups across a range of thresholds,
@@ -123,6 +135,8 @@ def plot_multiple_thresholds(
         title: Custom title for the plot. If not provided, a default title is generated
             that includes the DataFrame's index name and indicates whether confidence
             intervals are included in the plot.
+        ax: A Matplotlib Axes object. If provided, the plot will be drawn on this
+            Axes. If None, a new Figure and Axes will be created.
 
     Returns:
         A matplotlib Figure object visualizing metric values for different groups across
@@ -130,20 +144,25 @@ def plot_multiple_thresholds(
         available.
     """
     sns.set(style="whitegrid")
-    plt.figure(figsize=(10, 6))
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 6))
+    else:
+        fig = ax.get_figure()
+
     thresholds = bias_frame.values.columns.astype(float)
 
     for group in bias_frame.values.index:
         observed_values = bias_frame.values.loc[group]
-        plt.plot(thresholds, observed_values, label=group)
+        ax.plot(thresholds, observed_values, label=group)
 
         if bias_frame.lower is not None and bias_frame.upper is not None:
             lower_bound = bias_frame.lower.loc[group]
             upper_bound = bias_frame.upper.loc[group]
-            plt.fill_between(thresholds, lower_bound, upper_bound, alpha=0.3)
+            ax.fill_between(thresholds, lower_bound, upper_bound, alpha=0.3)
 
-    plt.xlabel("Threshold values")
-    plt.ylabel("Metric values")
+    ax.set_xlabel("Threshold values")
+    ax.set_ylabel("Metric values")
     title_with_ci = (
         ""
         if bias_frame.lower is None and bias_frame.upper is None
@@ -154,10 +173,10 @@ def plot_multiple_thresholds(
         if title is None
         else title
     )
-    plt.title(title, fontsize=16)
-    plt.legend(title="Group")
-    plt.grid(True)
+    ax.set_title(title, fontsize=16)
+    ax.legend(title="Group")
+    ax.grid(True)
     if log_scale:
-        plt.xscale("log")
-        plt.yscale("log")
-    return plt.gcf()
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+    return fig

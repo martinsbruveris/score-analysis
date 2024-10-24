@@ -47,14 +47,16 @@ def plot_single_threshold(
     else:
         fig = ax.get_figure()
 
+    y_labels = (
+        [" x ".join(map(str, item)) for item in bias_frame.values.index]
+        if isinstance(bias_frame.values.index, pd.core.indexes.multi.MultiIndex)
+        else bias_frame.values.index
+    )
+
     if bias_frame.lower is None and bias_frame.upper is None:
         ax.scatter(
             bias_frame.values[threshold],
-            (
-                [" x ".join(item) for item in bias_frame.values.index]
-                if isinstance(bias_frame.values.index, pd.core.indexes.multi.MultiIndex)
-                else bias_frame.values.index
-            ),
+            y_labels,
             marker="D",
             color="#999999",
             edgecolor="#ca0020",
@@ -73,7 +75,7 @@ def plot_single_threshold(
         )
         ax.errorbar(
             bias_frame.values[threshold],
-            bias_frame.values.index,
+            y_labels,
             xerr=error_bars,
             ecolor="#999999",
             capsize=8,
@@ -92,22 +94,28 @@ def plot_single_threshold(
 
     ax.set_xlim(0, max_value * 1.1)
     ax.set_xlabel("Metric values")
-    ax.set_ylabel(bias_frame.values.index.name)
+    ax.set_ylabel(
+        bias_frame.values.index.name if bias_frame.values.index.name else "Groups"
+    )
+
     title_with_ci = (
         ""
         if bias_frame.lower is None and bias_frame.upper is None
         else "with Confidence Intervals"
     )
+
     title_category = (
         bias_frame.values.index.names
         if isinstance(bias_frame.values.index, pd.core.indexes.multi.MultiIndex)
         else bias_frame.values.index.name
     )
+
     title = (
         f"Metric values {title_with_ci} by {title_category}, threshold: {threshold}"
         if title is None
         else title
     )
+
     ax.set_title(title, fontsize=16)
     fig.tight_layout()
     return fig

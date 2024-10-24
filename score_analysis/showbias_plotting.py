@@ -114,7 +114,7 @@ def plot_single_threshold(
 
 
 def plot_multiple_thresholds(
-    bias_frame,
+    bias_frame: BiasFrame,
     log_scale: bool = False,
     title: Optional[str] = None,
     ax: Optional[plt.Axes] = None,

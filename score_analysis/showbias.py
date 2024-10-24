@@ -93,7 +93,7 @@ def showbias(
 ) -> BiasFrame:
     """
     Calculates bias metrics for specific groups in a dataset, optionally
-    normalising metrics and calculating confidence intervals.
+    normalizing metrics and calculating confidence intervals.
 
     Args:
         data: Dataset with scores and actual labels.
@@ -101,7 +101,7 @@ def showbias(
         label_column: Column name for actual labels.
         score_column: Column name for predicted scores.
         metric: Bias metric to compute, must be a method of `ConfusionMatrix`.
-        normalize: Normalisation method for computed group metrics.
+        normalize: Normalization method for computed group metrics.
             Possible values are:
 
              * "by_overall" normalizes by the overall metric computed
@@ -159,7 +159,7 @@ def showbias(
     group_metrics = calculate_group_metric(score_object, **metric_kwargs)
 
     if normalize is not None:
-        group_metrics = _apply_normalisation(
+        group_metrics = _apply_normalization(
             group_metrics, score_object, calculate_metric, normalize, **metric_kwargs
         )
 
@@ -171,7 +171,7 @@ def showbias(
         )
 
         if normalize is not None:
-            samples = _apply_normalisation(
+            samples = _apply_normalization(
                 samples,
                 score_object,
                 calculate_metric,
@@ -211,7 +211,7 @@ def showbias(
     return BiasFrame(values=group_metrics)
 
 
-def _apply_normalisation(
+def _apply_normalization(
     group_metrics: np.ndarray,
     score_object: GroupScores,
     metric: Callable,
@@ -230,7 +230,7 @@ def _apply_normalisation(
         group_metrics: Array of metric values for each group.
         score_object: Object encapsulating score data and methods.
         metric: Function to compute the metric.
-        normalize: Method of normalisation, "by_overall" or "by_min".
+        normalize: Method of normalization, "by_overall" or "by_min".
         **kwargs: Additional keyword arguments passed to the metric function.
 
     Returns:

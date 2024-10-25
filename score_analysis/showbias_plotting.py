@@ -3,7 +3,6 @@ from typing import Optional
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 
 from score_analysis import BiasFrame
 
@@ -40,8 +39,6 @@ def plot_single_threshold(
         A matplotlib Figure object displaying the observed values at a specific
         threshold, with error bars for confidence intervals if available.
     """
-    sns.set(style="whitegrid")
-
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))
     else:
@@ -151,8 +148,6 @@ def plot_multiple_thresholds(
         a range of thresholds, with shaded areas representing confidence intervals if
         available.
     """
-    sns.set(style="whitegrid")
-
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))
     else:

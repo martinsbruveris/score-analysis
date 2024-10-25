@@ -40,9 +40,8 @@ def plot_single_threshold(
         threshold, with error bars for confidence intervals if available.
     """
     if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
-    else:
-        fig = ax.get_figure()
+        ax = plt.gca()
+    fig = ax.get_figure()
 
     y_labels = (
         [" x ".join(map(str, item)) for item in bias_frame.values.index]
@@ -149,9 +148,8 @@ def plot_multiple_thresholds(
         available.
     """
     if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
-    else:
-        fig = ax.get_figure()
+        ax = plt.gca()
+    fig = ax.get_figure()
 
     thresholds = bias_frame.values.columns.astype(float)
 

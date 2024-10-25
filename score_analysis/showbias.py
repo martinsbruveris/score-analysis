@@ -208,7 +208,7 @@ def showbias(
 
     # Handle zero-dimensional arrays
     columns = metric_kwargs.get("threshold")
-    if isinstance(columns, np.ndarray) and columns.ndim == 0:
+    if columns.ndim == 0:
         columns = np.expand_dims(columns, axis=0)
 
     group_metrics = pd.DataFrame(

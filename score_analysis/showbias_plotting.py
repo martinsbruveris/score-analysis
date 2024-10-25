@@ -12,7 +12,7 @@ def plot_single_threshold(
     threshold: float,
     title: Optional[str] = None,
     ax: Optional[plt.Axes] = None,
-) -> plt.Figure:
+):
     """
     Plots the observed values at a specific threshold, optionally with their
     confidence intervals if they are available.
@@ -34,10 +34,6 @@ def plot_single_threshold(
             threshold. Defaults to None.
         ax: A Matplotlib Axes object. If provided, the plot will be drawn on this
             Axes. If None, a new Figure and Axes will be created.
-
-    Returns:
-        A matplotlib Figure object displaying the observed values at a specific
-        threshold, with error bars for confidence intervals if available.
     """
     if ax is None:
         ax = plt.gca()
@@ -114,7 +110,6 @@ def plot_single_threshold(
 
     ax.set_title(title, fontsize=16)
     fig.tight_layout()
-    return fig
 
 
 def plot_multiple_thresholds(
@@ -122,7 +117,7 @@ def plot_multiple_thresholds(
     log_scale: bool = False,
     title: Optional[str] = None,
     ax: Optional[plt.Axes] = None,
-) -> plt.Figure:
+):
     """
     Plots metric values for different groups across a range of thresholds,
     optionally with their confidence intervals.
@@ -141,15 +136,9 @@ def plot_multiple_thresholds(
             intervals are included in the plot.
         ax: A Matplotlib Axes object. If provided, the plot will be drawn on this
             Axes. If None, a new Figure and Axes will be created.
-
-    Returns:
-        A matplotlib Figure object visualizing metric values for different groups across
-        a range of thresholds, with shaded areas representing confidence intervals if
-        available.
     """
     if ax is None:
         ax = plt.gca()
-    fig = ax.get_figure()
 
     thresholds = bias_frame.values.columns.astype(float)
 
@@ -180,4 +169,3 @@ def plot_multiple_thresholds(
     if log_scale:
         ax.set_xscale("log")
         ax.set_yscale("log")
-    return fig

@@ -316,11 +316,9 @@ def _add_extra_points(x_min, x_max, nb_points: int) -> np.ndarray:
     nb_after = nb_points - nb_before
     x = np.array([])
     if x_min > 0.0:
-        print("WAA")
         x_before = np.linspace(0.0, x_min, num=nb_before, endpoint=False)
         x = np.concatenate([x_before, x])
     if x_max < 1.0:
-        print("WOOO")
         # Thresholds will be sorted later. We use the reverse order to take advantage
         # of endpoint=False to exclude x[-1].
         x_after = np.linspace(1.0, x_max, num=nb_after, endpoint=False)

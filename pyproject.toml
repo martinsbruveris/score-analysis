@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "score-analysis"
-version = "0.2.3"
+version = "0.3.0"
 description = "Library to evaluate models"
 authors = [
     "Martins Bruveris <martins.bruveris@gmx.com>",

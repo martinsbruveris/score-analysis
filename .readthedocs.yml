@@ -9,10 +9,9 @@ build:
     python: "3.12"
   jobs:
     post_create_environment:
-      - pip install poetry
-      - poetry config virtualenvs.create false
+      - python -m pip install poetry
     post_install:
-      - poetry install --with docs --sync
+      - VIRTUAL_ENV=$READTHEDOCS_VIRTUALENV_PATH poetry install --with docs
 
 python:
   install:

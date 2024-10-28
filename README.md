@@ -1,5 +1,9 @@
 # score-analysis
 
+![Test Status](https://github.com/martinsbruveris/tensorflow-image-models/actions/workflows/tests.yml/badge.svg)
+[![Documentation Status](https://readthedocs.org/projects/score-analysis/badge/?version=latest)](https://score-analysis.readthedocs.io/en/latest/?badge=latest)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
 Package to analyse ML model results. Contains an efficient implementation of common
 metrics computations such as TPR, FPR, EER and methods for threshold setting.
 

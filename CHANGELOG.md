@@ -1,6 +1,6 @@
 # Change Log
 
-## Unpublished
+## v0.3.0 - 2024-10-28
 
 - Introduced dataclass `ROCCurve` for return values of `roc` and `roc_with_ci`.
 - Renamed `tools.py` to `roc.py`.

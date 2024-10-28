@@ -3,8 +3,7 @@
 Package to analyse ML model results. Contains an efficient implementation of common
 metrics computations such as TPR, FPR, EER and methods for threshold setting.
 
-Check out the online 
-[documentation]().
+Check out the online [documentation](https://score-analysis.readthedocs.io/en/latest/).
 
 ## Usage
 

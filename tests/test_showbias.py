@@ -8,8 +8,11 @@ from score_analysis import BootstrapConfig, showbias
 @pytest.mark.parametrize(
     "threshold, normalize, expected_values",
     [
+        [0.5, None, {"A": [0.0], "B": [1.0]}],
         [[0.5], None, {"A": [0.0], "B": [1.0]}],
+        [np.array(0.5), None, {"A": [0.0], "B": [1.0]}],
         [[0.0, 0.5, 1.0], None, {"A": [0.0, 0.0, 1.0], "B": [0.0, 1.0, 1.0]}],
+        [np.array([0.0, 0.5, 1.0]), None, {"A": [0.0, 0.0, 1.0], "B": [0.0, 1.0, 1.0]}],
         [[0.5], "by_overall", {"A": [0.0], "B": [2.0]}],
         [[0.5], "by_min", {"A": [0.0], "B": [1.0]}],
         [[0.0, 0.5, 1.0], "by_overall", {"A": [0.0, 0.0, 1.0], "B": [0.0, 2.0, 1.0]}],
@@ -32,8 +35,13 @@ def test_showbias(threshold, normalize, expected_values):
         score_column="score",
         normalize=normalize,
     )
+    expected_columns = np.asarray(threshold)
+    if expected_columns.ndim == 0:
+        expected_columns = np.expand_dims(expected_columns, axis=0)
     assert result.values.equals(
-        pd.DataFrame.from_dict(expected_values, orient="index", columns=threshold)
+        pd.DataFrame.from_dict(
+            expected_values, orient="index", columns=expected_columns
+        )
     )
 
 

@@ -284,8 +284,8 @@ which will result in several columns, one for every threshold:
 | female   | 0.311 | 0.508 | 0.705 |
 | male     | 0.252 | 0.474 | 0.697 |
 
-You can obtain metrics that are normalised. For example, you can normalise to the metric
-measured across the entire dataset by passing `normalise="by_overall"` argument, like so:
+You can obtain metrics that are normalized. For example, you can normalize to the metric
+measured across the entire dataset by passing `normalize="by_overall"` argument, like so:
 ```python
 bias_frame = showbias(
     data=df,
@@ -294,7 +294,7 @@ bias_frame = showbias(
     score_column="scores",
     metric="fnr",
     threshold=[0.5],
-    normalise="by_overall"
+    normalize="by_overall"
 )
 ```
 

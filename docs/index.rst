@@ -229,16 +229,16 @@ consistent handling of matrix shapes.
     :caption: Concepts
     :hidden:
 
-    concepts/confidence_intervals
+    content/concepts/confidence_intervals
 
 .. toctree::
     :maxdepth: 2
     :caption: Score Analysis
     :hidden:
 
-    score_analysis/cm
-    score_analysis/group_scores
-    score_analysis/metrics
-    score_analysis/roc_curve
-    score_analysis/scores
-    score_analysis/utils
+    content/score_analysis/cm
+    content/score_analysis/group_scores
+    content/score_analysis/metrics
+    content/score_analysis/roc_curve
+    content/score_analysis/scores
+    content/score_analysis/utils

@@ -140,7 +140,10 @@ def showbias(
         )
 
     if "threshold" in metric_kwargs:
-        metric_kwargs["threshold"] = np.asarray(metric_kwargs["threshold"])
+        threshold = np.asarray(metric_kwargs["threshold"])
+        if threshold.ndim == 0:
+            threshold = np.expand_dims(threshold, axis=0)
+        metric_kwargs["threshold"] = threshold
 
     score_object = GroupScores.from_labels(
         scores=data[score_column].values,
@@ -206,15 +209,10 @@ def showbias(
             ),
         )
 
-    # Handle zero-dimensional arrays
-    columns = metric_kwargs.get("threshold")
-    if columns.ndim == 0:
-        columns = np.expand_dims(columns, axis=0)
-
     group_metrics = pd.DataFrame(
         group_metrics.tolist(),
         index=group_index,
-        columns=columns,
+        columns=metric_kwargs.get("threshold"),
     )
     return BiasFrame(values=group_metrics)
 

@@ -27,8 +27,8 @@ taskipy = "^1.13"
 
 [tool.poetry.group.docs.dependencies]
 enum-tools = "*"
-sphinx = "^5.0.0"
-sphinx-rtd-theme = "*"
+sphinx = "~5.0.0"
+sphinx-rtd-theme = "~2.0.0"
 sphinx-toolbox = "^3.0.0"
 
 [tool.poetry.group.docs]

@@ -9,7 +9,7 @@ authors = [
     { name = "Simon Bozonnet", email = "simon.bozonnet@gmail.com" },
 ]
 readme = "README.md"
-requires-python = ">=3.9,<3.13"
+requires-python = ">=3.9,<3.15"
 
 dependencies = [
     "numpy",

@@ -1,50 +1,48 @@
-[tool.poetry]
+[project]
 name = "score-analysis"
 version = "0.3.0"
 description = "Library to evaluate models"
 authors = [
-    "Martins Bruveris <martins.bruveris@gmx.com>",
-    "Marian Schneider <marian.schnei@gmail.com>",
-    "Jochem Gietema <jochem@giete.ma>",
-    "Simon Bozonnet <simon.bozonnet@gmail.com>"
+    { name = "Martins Bruveris", email = "martins.bruveris@gmx.at" },
+    { name = "Marian Schneider", email = "marian.schnei@gmail.com" },
+    { name = "Jochem Gietema", email = "jochem@giete.ma" },
+    { name = "Simon Bozonnet", email = "simon.bozonnet@gmail.com" },
 ]
 readme = "README.md"
-packages = [{include = "score_analysis"}]
+requires-python = ">=3.9,<3.13"
 
-[tool.poetry.dependencies]
-python = ">=3.9,<3.13"
-numpy = "*"
-pandas = "*"
-scipy = "*"
-tabulate = "*"
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "tabulate",
+]
 
-[tool.poetry.group.dev.dependencies]
-bumpversion = "*"
-pytest = "*"
-pytest-cov = "*"
-ruff = "*"
-taskipy = "^1.13"
+[dependency-groups]
+dev = [
+    "bumpversion",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "taskipy>=1.13"
+]
 
-[tool.poetry.group.docs.dependencies]
-enum-tools = "*"
-sphinx = "~5.0.0"
-sphinx-rtd-theme = "~2.0.0"
-sphinx-toolbox = "^3.0.0"
+docs = [
+    "enum-tools",
+    "sphinx~=5.0.0",
+    "sphinx-rtd-theme~=2.0.0",
+    "sphinx-toolbox>=3.0.0"
+]
 
-[tool.poetry.group.docs]
-optional = true
-
-[tool.poetry.group.jupyter.dependencies]
-dataframe-image = "*"
-jupyter = "*"
-matplotlib = "*"
-multiprocess = "*"
-seaborn = "*"
-scikit-learn = "*"
-tqdm = "*"
-
-[tool.poetry.group.jupyter]
-optional = true
+jupyter = [
+    "dataframe-image",
+    "jupyter",
+    "matplotlib",
+    "multiprocess",
+    "seaborn",
+    "scikit-learn",
+    "tqdm"
+]
 
 [tool.taskipy.tasks]
 bumpversion = "poetry run bumpversion patch && git push && git push --tags"
@@ -59,6 +57,5 @@ line-length = 88
 lint = { select = ["E", "F", "I"] }
 
 [build-system]
-requires = ["poetry>=0.12"]
-build-backend = "poetry.masonry.api"
-
+requires = ["hatchling"]
+build-backend = "hatchling.build"

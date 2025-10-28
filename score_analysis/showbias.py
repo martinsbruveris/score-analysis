@@ -289,9 +289,9 @@ def _validate_column_inputs(
     """
     assert isinstance(data, pd.DataFrame), "`data` needs to be a pandas data frame"
     if isinstance(group_columns, list):
-        assert all(
-            [group in data.columns for group in group_columns]
-        ), "`group_columns` not found in `data`"
+        assert all([group in data.columns for group in group_columns]), (
+            "`group_columns` not found in `data`"
+        )
     else:
         assert group_columns in data.columns, "`group_columns` not found in `data`"
     assert label_column in data.columns, "`label_column` not found in `data`"

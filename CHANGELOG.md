@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.3.2 - 2025-10-28
+
+- Fix test badge in `README.md`.
+
 ## v0.3.1 - 2025-10-28
 
 - Converted project from `poetry` to `uv`.

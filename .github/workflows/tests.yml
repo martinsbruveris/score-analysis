@@ -13,42 +13,21 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        python: ['3.8', '3.9', '3.10', '3.11', '3.12']
-        poetry: ['1.8']
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 1
 
-    - name: Set up Python ${{ matrix.python }}
-      uses: actions/setup-python@v5
+    - name: Install uv and set the Python version
+      uses: astral-sh/setup-uv@v6
       with:
         python-version: ${{ matrix.python }}
 
-    - name: Install poetry
-      uses: abatilo/actions-poetry@v3
-      with:
-        poetry-version: ${{ matrix.poetry }}
-
-    - name: Cache poetry environment
-      uses: actions/cache@v4
-      id: cache
-      with:
-        path: ~/.virtualenvs
-        key: poetry-${{ matrix.os }}-${{ matrix.python }}-${{ hashFiles('**/poetry.lock') }}
-        restore-keys: |
-          poetry-${{ matrix.os }}-${{ matrix.python }}-${{ hashFiles('**/poetry.lock') }}
-
-    - name: Set Poetry config
-      run: |
-        poetry config virtualenvs.in-project false
-        poetry config virtualenvs.path ~/.virtualenvs
-
-    - name: Install Dependencies
-      run: poetry install
-      if: steps.cache.outputs.cache-hit != 'true'
+    - name: Install the project
+      run: uv sync --locked --dev
 
     - name: Run tests
-      run: poetry run pytest -sv tests
+      run: uv run pytest -sv tests

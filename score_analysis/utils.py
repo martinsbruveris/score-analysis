@@ -141,7 +141,7 @@ def bootstrap_ci(
 
 
 def invert_pl_function(x: np.ndarray, y: np.ndarray, t: np.ndarray) -> List[np.ndarray]:
-    """
+    r"""
     Inverts piecewise linear function.
 
     The piecewise linear function  :math:`f(x_i) = y_i` is defined the by the sequence

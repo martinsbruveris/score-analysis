@@ -1,5 +1,10 @@
 # Change Log
 
+## v0.3.1 - 2025-10-28
+
+- Converted project from `poetry` to `uv`.
+- Relaxed python constraint to include 3.13 and 3.14.
+
 ## v0.3.0 - 2024-10-28
 
 - Introduced dataclass `ROCCurve` for return values of `roc` and `roc_with_ci`.

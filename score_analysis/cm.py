@@ -27,7 +27,7 @@ def cm_class_metric(metric=None, axis: int = -1):
 
     Returns:
         Callable with the same signature implementing the metric for general confusion
-        matrices and the as_dict paramter.
+        matrices and the as_dict parameter.
     """
 
     def decorator(_metric):

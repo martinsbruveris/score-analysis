@@ -1,5 +1,11 @@
 # Change Log
 
+## v0.3.3 - 2026-03-24
+
+- Adding `embedding_distances` function to compute positive and negative distances
+  between embeddings.
+- Removed support for Python 3.9.
+
 ## v0.3.2 - 2025-10-28
 
 - Fix test badge in `README.md`.

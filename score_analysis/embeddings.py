@@ -2,9 +2,14 @@
 Functions to compute distances and similarities between embeddings.
 """
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from .scores import Scores
+
+if TYPE_CHECKING:  # pragma: no cover
+    import torch
 
 
 def l2_squared_matrix(x, y):
@@ -26,6 +31,7 @@ def l2_squared_matrix(x, y):
     d *= -2
     d += x_norm
     d += y_norm
+    np.clip(d, a_min=0.0, a_max=None, out=d)  # Distances should be non-negative
     return d
 
 
@@ -85,6 +91,7 @@ def embedding_distances(
     neg_limit: int | float | None = None,
     batch_size: int | None = 1e8,
     use_torch: bool = False,
+    torch_dtype: "torch.dtype | str" = "float32",
 ) -> Scores:
     """Compute pairwise distances between embeddings, split into positive and negative
     pairs based on labels.
@@ -108,6 +115,8 @@ def embedding_distances(
         batch_size: Process embeddings in batches to limit memory usage. If ``None``,
             all pairs are computed at once.
         use_torch: Whether to use PyTorch for distance computation.
+        torch_dtype: Data type to use for PyTorch computations. We can use "bfloat16"
+            on supported GPUs for faster computation and reduced memory usage.
 
     Returns:
         A ``Scores`` object with positive and negative distance arrays.
@@ -142,8 +151,10 @@ def embedding_distances(
 
     if use_torch:
         compute_fn = _embedding_distances_torch
+        kwargs = {"torch_dtype": _get_torch_dtype(torch_dtype)}
     else:
         compute_fn = _embedding_distances_numpy
+        kwargs = {}
 
     pos_dists, neg_dists = compute_fn(
         emb=emb,
@@ -152,6 +163,7 @@ def embedding_distances(
         pos_limit=pos_limit,
         neg_limit=neg_limit,
         row_batch_size=row_batch_size,
+        **kwargs,
     )
 
     nb_easy_pos = nb_all_pos - len(pos_dists)
@@ -236,6 +248,22 @@ def _get_torch_device():  # pragma: no cover
     return torch.device("cpu")
 
 
+def _get_torch_dtype(dtype: "torch.dtype | str | None") -> "torch.dtype | None":
+    """Function to convert string to torch.type. Useful for config parsing."""
+    import torch
+
+    if dtype is None:
+        return None
+    if isinstance(dtype, torch.dtype):
+        return dtype
+
+    if not isinstance(dtype, str):
+        raise TypeError(f"dtype must be torch.dtype or str, but got {type(dtype)}")
+    dtype = getattr(torch, dtype)
+    assert isinstance(dtype, torch.dtype)
+    return dtype
+
+
 def _embedding_distances_torch(
     emb: np.ndarray,
     labels: np.ndarray,
@@ -243,6 +271,7 @@ def _embedding_distances_torch(
     pos_limit: int | None,
     neg_limit: int | None,
     row_batch_size: int,
+    torch_dtype: "torch.dtype",
 ):
     import torch
 
@@ -268,9 +297,10 @@ def _embedding_distances_torch(
     dist_fn = dist_fn_dict[dist]
 
     input_dtype = emb.dtype
+    torch_dtype = torch_dtype or torch.float32
     device = _get_torch_device()
 
-    emb = torch.as_tensor(emb, dtype=torch.float32, device=device)
+    emb = torch.as_tensor(emb, dtype=torch_dtype, device=device)
     if dist == "cosine":
         emb_norm = torch.norm(emb, dim=-1, keepdim=True)
         emb = emb / torch.clamp(emb_norm, min=1e-10)
@@ -280,8 +310,8 @@ def _embedding_distances_torch(
     labels = torch.as_tensor(labels, device=device)
     n = len(emb)
 
-    pos_dists = torch.tensor([], dtype=torch.float32, device=device)
-    neg_dists = torch.tensor([], dtype=torch.float32, device=device)
+    pos_dists = torch.tensor([], dtype=torch_dtype, device=device)
+    neg_dists = torch.tensor([], dtype=torch_dtype, device=device)
 
     with torch.inference_mode():
         for start in range(0, n, row_batch_size):
@@ -318,8 +348,8 @@ def _embedding_distances_torch(
                     neg_dists, _ = torch.topk(neg_dists, neg_limit, largest=False)
 
     # Convert to numpy at the very end
-    pos_dists = pos_dists.cpu().numpy().astype(input_dtype)
-    neg_dists = neg_dists.cpu().numpy().astype(input_dtype)
+    pos_dists = pos_dists.cpu().float().numpy().astype(input_dtype)
+    neg_dists = neg_dists.cpu().float().numpy().astype(input_dtype)
 
     # Post-processing for cosine distance
     if dist == "cosine":

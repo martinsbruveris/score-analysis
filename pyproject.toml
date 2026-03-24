@@ -18,6 +18,9 @@ dependencies = [
     "tabulate",
 ]
 
+[project.optional-dependencies]
+torch = ["torch"]
+
 [dependency-groups]
 dev = [
     "bumpversion",

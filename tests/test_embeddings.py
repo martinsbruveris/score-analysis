@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
+import torch
 
-from score_analysis.embeddings import embedding_distances
+from score_analysis.embeddings import _get_torch_dtype, embedding_distances
 
 
 @pytest.mark.parametrize("use_torch", [False, True])
@@ -103,3 +104,24 @@ def test_torch_numpy_equality(dist):
 
     np.testing.assert_allclose(scores_np.pos, scores_torch.pos, rtol=1e-6)
     np.testing.assert_allclose(scores_np.neg, scores_torch.neg, rtol=1e-6)
+
+
+def test_torch_dtype():
+    """Test that the use_torch option respects the dtype of the input embeddings."""
+    rng = np.random.default_rng(42)
+    emb = rng.standard_normal((10, 4)).astype(np.float64)
+    labels = rng.integers(0, 2, size=10)
+
+    scores = embedding_distances(emb, labels, use_torch=True, torch_dtype="float32")
+    assert scores.pos.dtype == np.float64
+    assert scores.neg.dtype == np.float64
+
+
+def test_get_torch_dtype():
+    """Test the _get_torch_dtype function."""
+    assert _get_torch_dtype(None) is None
+    assert _get_torch_dtype("float32") == torch.float32
+    assert _get_torch_dtype("float64") == torch.float64
+    assert _get_torch_dtype(torch.float16) == torch.float16
+    with pytest.raises(TypeError):
+        _get_torch_dtype(3)

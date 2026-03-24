@@ -1,5 +1,10 @@
 # Change Log
 
+## v0.3.4 - 2026-03-24
+
+- Adding parameter `torch_dtype` to `embedding_distances` to speed up GPU-based
+  computations with `bfloat16`.
+
 ## v0.3.3 - 2026-03-24
 
 - Adding `embedding_distances` function to compute positive and negative distances

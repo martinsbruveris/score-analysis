@@ -1,6 +1,6 @@
 [project]
 name = "score-analysis"
-version = "0.3.3"
+version = "0.3.4"
 description = "Library to evaluate models"
 authors = [
     { name = "Martins Bruveris", email = "martins.bruveris@gmx.at" },

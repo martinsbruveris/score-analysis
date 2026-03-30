@@ -1,5 +1,10 @@
 # Change Log
 
+## v0.3.5 - 2026-03-30
+
+- Adding parameter `return_indices` to `embedding_distances` to return the indices that
+  realize the largest positive and smallest negative distances.
+
 ## v0.3.4 - 2026-03-24
 
 - Adding parameter `torch_dtype` to `embedding_distances` to speed up GPU-based

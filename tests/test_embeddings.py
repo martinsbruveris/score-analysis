@@ -125,3 +125,45 @@ def test_get_torch_dtype():
     assert _get_torch_dtype(torch.float16) == torch.float16
     with pytest.raises(TypeError):
         _get_torch_dtype(3)
+
+
+@pytest.mark.parametrize("use_torch", [False])
+def test_embedding_distances_indices(use_torch):
+    """Test that we return the correct indices for positive and negative pairs."""
+    emb = np.array([[0], [1], [3], [7], [14]])
+    labels = np.array([0, 0, 1, 1, 1])
+
+    scores, pos_idx, neg_idx = embedding_distances(
+        emb=emb,
+        labels=labels,
+        dist="l2",
+        batch_size=None,
+        use_torch=use_torch,
+        return_indices=True,
+    )
+    assert np.array_equal(scores.pos, [1, 4, 7, 11])
+    assert np.array_equal(scores.neg, [2, 3, 6, 7, 13, 14])
+    assert np.array_equal(pos_idx, [[0, 1], [2, 3], [3, 4], [2, 4]])
+    assert np.array_equal(neg_idx, [[1, 2], [0, 2], [1, 3], [0, 3], [1, 4], [0, 4]])
+
+
+@pytest.mark.parametrize("use_torch", [False])
+def test_embedding_distances_indices_limits(use_torch):
+    """Test that we return the correct indices for positive and negative pairs."""
+    emb = np.array([[0], [1], [3], [7], [14]])
+    labels = np.array([0, 0, 1, 1, 1])
+
+    scores, pos_idx, neg_idx = embedding_distances(
+        emb=emb,
+        labels=labels,
+        dist="l2",
+        pos_limit=2,
+        neg_limit=2,
+        batch_size=None,
+        use_torch=use_torch,
+        return_indices=True,
+    )
+    assert np.array_equal(scores.pos, [7, 11])
+    assert np.array_equal(scores.neg, [2, 3])
+    assert np.array_equal(pos_idx, [[3, 4], [2, 4]])
+    assert np.array_equal(neg_idx, [[1, 2], [0, 2]])

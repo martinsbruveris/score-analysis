@@ -90,9 +90,10 @@ def embedding_distances(
     pos_limit: int | float | None = None,
     neg_limit: int | float | None = None,
     batch_size: int | None = 1e8,
+    return_indices: bool = False,
     use_torch: bool = False,
     torch_dtype: "torch.dtype | str" = "float32",
-) -> Scores:
+) -> Scores | tuple[Scores, np.ndarray, np.ndarray]:
     """Compute pairwise distances between embeddings, split into positive and negative
     pairs based on labels.
 
@@ -114,12 +115,17 @@ def embedding_distances(
         neg_limit: Maximum number (or fraction) of negative pairs to return.
         batch_size: Process embeddings in batches to limit memory usage. If ``None``,
             all pairs are computed at once.
+        return_indices: If True, also return the embedding indices for each pair.
+            Only supported with ``use_torch=False``.
         use_torch: Whether to use PyTorch for distance computation.
         torch_dtype: Data type to use for PyTorch computations. We can use "bfloat16"
             on supported GPUs for faster computation and reduced memory usage.
 
     Returns:
-        A ``Scores`` object with positive and negative distance arrays.
+        A ``Scores`` object with positive and negative distance arrays. If
+        ``return_indices`` is True, returns a tuple ``(scores, pos_idx, neg_idx)``
+        where ``pos_idx`` and ``neg_idx`` are arrays of shape ``(K, 2)`` containing
+        the embedding indices for each pair, sorted by distance.
     """
     emb = np.asarray(emb)
     if np.issubdtype(emb.dtype, np.integer):
@@ -156,22 +162,33 @@ def embedding_distances(
         compute_fn = _embedding_distances_numpy
         kwargs = {}
 
-    pos_dists, neg_dists = compute_fn(
+    pos_dists, neg_dists, pos_idx, neg_idx = compute_fn(
         emb=emb,
         labels=labels,
         dist=dist,
         pos_limit=pos_limit,
         neg_limit=neg_limit,
         row_batch_size=row_batch_size,
+        return_indices=return_indices,
         **kwargs,
     )
 
     nb_easy_pos = nb_all_pos - len(pos_dists)
     nb_easy_neg = nb_all_neg - len(neg_dists)
 
-    return Scores(
+    scores = Scores(
         pos_dists, neg_dists, nb_easy_pos=nb_easy_pos, nb_easy_neg=nb_easy_neg
     )
+
+    if return_indices:
+        # Sort indices to match the sorted order of distances in Scores
+        pos_order = np.argsort(pos_dists)
+        pos_idx = pos_idx[pos_order]
+        neg_order = np.argsort(neg_dists)
+        neg_idx = neg_idx[neg_order]
+        return scores, pos_idx, neg_idx
+    else:
+        return scores
 
 
 def _embedding_distances_numpy(
@@ -181,6 +198,7 @@ def _embedding_distances_numpy(
     pos_limit: int | None,
     neg_limit: int | None,
     row_batch_size: int,
+    return_indices: bool,
 ):
     dist_fn_dict = {
         "l2_squared": l2_squared_matrix,
@@ -195,6 +213,8 @@ def _embedding_distances_numpy(
 
     pos_dists = np.array([], dtype=emb.dtype)
     neg_dists = np.array([], dtype=emb.dtype)
+    pos_idx = np.empty((0, 2), dtype=np.intp)
+    neg_idx = np.empty((0, 2), dtype=np.intp)
 
     for start in range(0, n, row_batch_size):
         end = min(start + row_batch_size, n)
@@ -208,27 +228,42 @@ def _embedding_distances_numpy(
         # Label match matrix for this batch
         same_label = labels[start:end, None] == labels[None, start:]  # (B, N)
 
-        pos_batch = batch_dists[upper_mask & same_label]
-        neg_batch = batch_dists[upper_mask & ~same_label]
+        pos_mask = upper_mask & same_label
+        neg_mask = upper_mask & ~same_label
+        pos_batch = batch_dists[pos_mask]
+        neg_batch = batch_dists[neg_mask]
+
+        if return_indices:
+            # Extract (row, col) index pairs for matched entries
+            rows = np.broadcast_to(row_indices, batch_dists.shape)
+            cols = np.broadcast_to(col_indices, batch_dists.shape)
+            pos_idx_batch = np.column_stack([rows[pos_mask], cols[pos_mask]])
+            neg_idx_batch = np.column_stack([rows[neg_mask], cols[neg_mask]])
 
         # Merge with running buffer and trim to keep only the hardest pairs
         if len(pos_batch) > 0:
             pos_dists = np.concatenate([pos_dists, pos_batch])
+            if return_indices:
+                pos_idx = np.concatenate([pos_idx, pos_idx_batch])
             if pos_limit is not None and len(pos_dists) > pos_limit:
                 # Hardest positive pairs have the largest distances
-                pos_dists = np.partition(pos_dists, -pos_limit)[-pos_limit:]
-                # pos_dists.partition(-pos_limit)
-                # pos_dists = pos_dists[-pos_limit :]
+                keep = np.argpartition(pos_dists, -pos_limit)[-pos_limit:]
+                pos_dists = pos_dists[keep]
+                if return_indices:
+                    pos_idx = pos_idx[keep]
 
         if len(neg_batch) > 0:
             neg_dists = np.concatenate([neg_dists, neg_batch])
+            if return_indices:
+                neg_idx = np.concatenate([neg_idx, neg_idx_batch])
             if neg_limit is not None and len(neg_dists) > neg_limit:
                 # Hardest negative pairs have the smallest distances
-                neg_dists = np.partition(neg_dists, neg_limit)[:neg_limit]
-                # neg_dists.partition(neg_limit)
-                # neg_dists = neg_dists[:neg_limit]
+                keep = np.argpartition(neg_dists, neg_limit)[:neg_limit]
+                neg_dists = neg_dists[keep]
+                if return_indices:
+                    neg_idx = neg_idx[keep]
 
-    return pos_dists, neg_dists
+    return pos_dists, neg_dists, pos_idx, neg_idx
 
 
 def _get_torch_device():  # pragma: no cover
@@ -272,6 +307,7 @@ def _embedding_distances_torch(
     neg_limit: int | None,
     row_batch_size: int,
     torch_dtype: "torch.dtype",
+    return_indices: bool,
 ):
     import torch
 
@@ -312,6 +348,8 @@ def _embedding_distances_torch(
 
     pos_dists = torch.tensor([], dtype=torch_dtype, device=device)
     neg_dists = torch.tensor([], dtype=torch_dtype, device=device)
+    pos_idx = torch.empty((0, 2), dtype=torch.long, device=device)
+    neg_idx = torch.empty((0, 2), dtype=torch.long, device=device)
 
     with torch.inference_mode():
         for start in range(0, n, row_batch_size):
@@ -331,28 +369,47 @@ def _embedding_distances_torch(
             # Label match matrix for this batch
             same_label = labels[start:end].unsqueeze(1) == labels[start:].unsqueeze(0)
 
-            pos_batch = batch_dists[upper_mask & same_label]
-            neg_batch = batch_dists[upper_mask & ~same_label]
+            pos_mask = upper_mask & same_label
+            neg_mask = upper_mask & ~same_label
+            pos_batch = batch_dists[pos_mask]
+            neg_batch = batch_dists[neg_mask]
+
+            if return_indices:
+                rows = row_indices.expand_as(batch_dists)
+                cols = col_indices.expand_as(batch_dists)
+                pos_idx_batch = torch.stack([rows[pos_mask], cols[pos_mask]], dim=1)
+                neg_idx_batch = torch.stack([rows[neg_mask], cols[neg_mask]], dim=1)
 
             # Merge with running buffer and trim to keep only the hardest pairs
             if len(pos_batch) > 0:
                 pos_dists = torch.cat([pos_dists, pos_batch])
+                if return_indices:
+                    pos_idx = torch.cat([pos_idx, pos_idx_batch])
                 if pos_limit is not None and len(pos_dists) > pos_limit:
                     # Hardest positive pairs have the largest distances
-                    pos_dists, _ = torch.topk(pos_dists, pos_limit)
+                    pos_dists, keep = torch.topk(pos_dists, pos_limit)
+                    if return_indices:
+                        pos_idx = pos_idx[keep]
 
             if len(neg_batch) > 0:
                 neg_dists = torch.cat([neg_dists, neg_batch])
+                if return_indices:
+                    neg_idx = torch.cat([neg_idx, neg_idx_batch])
                 if neg_limit is not None and len(neg_dists) > neg_limit:
                     # Hardest negative pairs have the smallest distances
-                    neg_dists, _ = torch.topk(neg_dists, neg_limit, largest=False)
+                    neg_dists, keep = torch.topk(neg_dists, neg_limit, largest=False)
+                    if return_indices:
+                        neg_idx = neg_idx[keep]
 
     # Convert to numpy at the very end
     pos_dists = pos_dists.cpu().float().numpy().astype(input_dtype)
     neg_dists = neg_dists.cpu().float().numpy().astype(input_dtype)
+    pos_idx = pos_idx.cpu().numpy().astype(np.intp)
+    neg_idx = neg_idx.cpu().numpy().astype(np.intp)
 
     # Post-processing for cosine distance
     if dist == "cosine":
         pos_dists += 1
         neg_dists += 1
-    return pos_dists, neg_dists
+
+    return pos_dists, neg_dists, pos_idx, neg_idx

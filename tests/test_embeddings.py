@@ -127,7 +127,7 @@ def test_get_torch_dtype():
         _get_torch_dtype(3)
 
 
-@pytest.mark.parametrize("use_torch", [False])
+@pytest.mark.parametrize("use_torch", [False, True])
 def test_embedding_distances_indices(use_torch):
     """Test that we return the correct indices for positive and negative pairs."""
     emb = np.array([[0], [1], [3], [7], [14]])
@@ -147,7 +147,7 @@ def test_embedding_distances_indices(use_torch):
     assert np.array_equal(neg_idx, [[1, 2], [0, 2], [1, 3], [0, 3], [1, 4], [0, 4]])
 
 
-@pytest.mark.parametrize("use_torch", [False])
+@pytest.mark.parametrize("use_torch", [False, True])
 def test_embedding_distances_indices_limits(use_torch):
     """Test that we return the correct indices for positive and negative pairs."""
     emb = np.array([[0], [1], [3], [7], [14]])

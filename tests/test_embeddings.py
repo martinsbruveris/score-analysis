@@ -173,7 +173,7 @@ def test_embedding_distances_indices_limits(use_torch):
     assert np.array_equal(neg_idx, [[1, 2], [0, 2]])
 
 
-@pytest.mark.parametrize("use_torch", [False])
+@pytest.mark.parametrize("use_torch", [False, True])
 @pytest.mark.parametrize("rank", [None, 1, 2])
 @pytest.mark.parametrize("batch_size", [None, 4])
 def test_probe_gallery_distances(use_torch, rank, batch_size):
@@ -195,7 +195,7 @@ def test_probe_gallery_distances(use_torch, rank, batch_size):
     assert np.array_equal(result, expected)
 
 
-@pytest.mark.parametrize("use_torch", [False])
+@pytest.mark.parametrize("use_torch", [False, True])
 def test_probe_gallery_invalid_distance(use_torch):
     """Test that an invalid distance metric raises an error."""
     probe = np.array([[0], [1], [2]])
@@ -205,3 +205,28 @@ def test_probe_gallery_invalid_distance(use_torch):
         probe_gallery_distances(
             probe, gallery, dist="invalid_distance", use_torch=use_torch
         )
+
+
+@pytest.mark.parametrize("dist", ["l2", "l2_squared", "cosine"])
+def test_probe_gallery_torch_numpy_equality(dist):
+    """Results from use_torch=True and use_torch=False should match."""
+    rng = np.random.default_rng(42)
+    probe = rng.standard_normal((20, 8)).astype(np.float32)
+    gallery = rng.standard_normal((30, 8)).astype(np.float32)
+
+    results_np = probe_gallery_distances(probe, gallery, dist=dist, use_torch=False)
+    results_torch = probe_gallery_distances(probe, gallery, dist=dist, use_torch=True)
+
+    np.testing.assert_allclose(results_np, results_torch, rtol=1e-6)
+
+
+def test_probe_gallery_torch_dtype():
+    """Test that the use_torch option respects the dtype of the input embeddings."""
+    rng = np.random.default_rng(42)
+    probe = rng.standard_normal((10, 4)).astype(np.float64)
+    gallery = rng.standard_normal((15, 4)).astype(np.float64)
+
+    results = probe_gallery_distances(
+        probe, gallery, use_torch=True, torch_dtype="float32"
+    )
+    assert results.dtype == np.float64

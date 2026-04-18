@@ -333,7 +333,6 @@ def _embedding_distances_torch(
     dist_fn = dist_fn_dict[dist]
 
     input_dtype = emb.dtype
-    torch_dtype = torch_dtype or torch.float32
     device = _get_torch_device()
 
     emb = torch.as_tensor(emb, dtype=torch_dtype, device=device)
@@ -469,12 +468,20 @@ def probe_gallery_distances(
     else:
         row_batch_size = max(1, int(batch_size) // g)
 
-    return _probe_gallery_distances_numpy(
+    if use_torch:
+        compute_fn = _probe_gallery_distances_torch
+        kwargs = {"torch_dtype": _get_torch_dtype(torch_dtype)}
+    else:
+        compute_fn = _probe_gallery_distances_numpy
+        kwargs = {}
+
+    return compute_fn(
         probes=probes,
         gallery=gallery,
         dist=dist,
         rank=rank,
         row_batch_size=row_batch_size,
+        **kwargs,
     )
 
 
@@ -510,5 +517,75 @@ def _probe_gallery_distances_numpy(
             top_dists = batch_dists
         top_dists.sort(axis=1)
         result[start:end] = top_dists
+
+    return result
+
+
+def _probe_gallery_distances_torch(
+    probes: np.ndarray,
+    gallery: np.ndarray,
+    dist: str,
+    rank: int,
+    row_batch_size: int,
+    torch_dtype: "torch.dtype",
+) -> np.ndarray:
+    import torch
+
+    def _l2_squared_matrix(x, y, x_n, y_n):
+        return x_n + y_n.mT - 2.0 * x @ y.mT
+
+    def _l2_matrix(x, y, x_n, y_n):
+        return torch.cdist(x, y, p=2)
+
+    def _cosine_matrix(x, y, x_n, y_n):
+        return -x @ y.mT  # We add 1 at the post-processing stage
+
+    dist_fn_dict = {
+        "l2_squared": _l2_squared_matrix,
+        "l2": _l2_matrix,
+        "cosine": _cosine_matrix,
+    }
+    if dist not in dist_fn_dict:
+        raise ValueError(f"Unknown distance: {dist}")
+    dist_fn = dist_fn_dict[dist]
+
+    input_dtype = probes.dtype
+    device = _get_torch_device()
+
+    probes = torch.as_tensor(probes, dtype=torch_dtype, device=device)
+    gallery = torch.as_tensor(gallery, dtype=torch_dtype, device=device)
+
+    if dist == "cosine":
+        probe_norm = torch.norm(probes, dim=-1, keepdim=True)
+        probes = probes / torch.clamp(probe_norm, min=1e-10)
+        gallery_norm = torch.norm(gallery, dim=-1, keepdim=True)
+        gallery = gallery / torch.clamp(gallery_norm, min=1e-10)
+
+    # Squared norms for l2_squared; harmless for other metrics
+    probe_norms = (probes**2).sum(dim=-1, keepdim=True)
+    gallery_norms = (gallery**2).sum(dim=-1, keepdim=True)
+
+    p = len(probes)
+    g = len(gallery)
+    result = torch.empty((p, rank), dtype=torch_dtype, device=device)
+
+    with torch.inference_mode():
+        for start in range(0, p, row_batch_size):
+            end = min(start + row_batch_size, p)
+            batch_dists = dist_fn(
+                probes[start:end], gallery, probe_norms[start:end], gallery_norms
+            )
+
+            if rank < g:
+                result[start:end] = torch.topk(
+                    batch_dists, rank, dim=1, largest=False, sorted=True
+                ).values
+            else:
+                result[start:end] = torch.sort(batch_dists, dim=1).values
+
+    result = result.cpu().float().numpy().astype(input_dtype)
+
+    if dist == "cosine":
+        result += 1
 
     return result

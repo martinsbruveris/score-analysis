@@ -2,7 +2,11 @@ import numpy as np
 import pytest
 import torch
 
-from score_analysis.embeddings import _get_torch_dtype, embedding_distances
+from score_analysis.embeddings import (
+    _get_torch_dtype,
+    embedding_distances,
+    probe_gallery_distances,
+)
 
 
 @pytest.mark.parametrize("use_torch", [False, True])
@@ -167,3 +171,37 @@ def test_embedding_distances_indices_limits(use_torch):
     assert np.array_equal(scores.neg, [2, 3])
     assert np.array_equal(pos_idx, [[3, 4], [2, 4]])
     assert np.array_equal(neg_idx, [[1, 2], [0, 2]])
+
+
+@pytest.mark.parametrize("use_torch", [False])
+@pytest.mark.parametrize("rank", [None, 1, 2])
+@pytest.mark.parametrize("batch_size", [None, 4])
+def test_probe_gallery_distances(use_torch, rank, batch_size):
+    """Test basic probe-gallery distance calculations."""
+    kwargs = {"batch_size": batch_size, "use_torch": use_torch, "rank": rank}
+
+    probe = np.array([[0], [1], [2]])
+    gallery = np.array([[5], [4], [3]])
+
+    l2_matrix = np.array([[3, 4, 5], [2, 3, 4], [1, 2, 3]])
+    l2_sq_matrix = l2_matrix**2  # [[9, 16, 25], [4, 9, 16], [1, 4, 9]]
+
+    result = probe_gallery_distances(probe, gallery, dist="l2_squared", **kwargs)
+    expected = l2_sq_matrix if rank is None else l2_sq_matrix[:, :rank]
+    assert np.array_equal(result, expected)
+
+    result = probe_gallery_distances(probe, gallery, dist="l2", **kwargs)
+    expected = l2_matrix if rank is None else l2_matrix[:, :rank]
+    assert np.array_equal(result, expected)
+
+
+@pytest.mark.parametrize("use_torch", [False])
+def test_probe_gallery_invalid_distance(use_torch):
+    """Test that an invalid distance metric raises an error."""
+    probe = np.array([[0], [1], [2]])
+    gallery = np.array([[5], [4], [3]])
+
+    with pytest.raises(ValueError):
+        probe_gallery_distances(
+            probe, gallery, dist="invalid_distance", use_torch=use_torch
+        )

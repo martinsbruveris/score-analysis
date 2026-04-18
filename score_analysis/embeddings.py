@@ -413,3 +413,102 @@ def _embedding_distances_torch(
         neg_dists += 1
 
     return pos_dists, neg_dists, pos_idx, neg_idx
+
+
+def probe_gallery_distances(
+    probes: np.ndarray,
+    gallery: np.ndarray,
+    dist: str = "l2_squared",
+    rank: int | None = None,
+    batch_size: int | None = 1e8,
+    return_indices: bool = False,
+    use_torch: bool = False,
+    torch_dtype: "torch.dtype | str" = "float32",
+) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
+    """Compute distances from probe embeddings to the closest gallery embeddings.
+
+    For each probe, computes distances to all gallery embeddings and returns the
+    ``rank`` smallest distances, sorted in ascending order.
+
+    Args:
+        probes: Array of shape ``(P, D)`` containing probe embeddings.
+        gallery: Array of shape ``(G, D)`` containing gallery embeddings.
+        dist: Distance metric. One of ``"l2_squared"``, ``"l2"`` or ``"cosine"``.
+        rank: Number of closest gallery items to return per probe. If ``None``,
+            returns distances to all gallery items (sorted).
+        batch_size: Maximum number of distances to keep in memory at once.
+            Controls the probe batch size as ``batch_size // G``. If ``None``,
+            all distances are computed at once.
+        return_indices: If True, also return the gallery indices for the closest
+            items.
+        use_torch: Whether to use PyTorch for distance computation.
+        torch_dtype: Data type for PyTorch computations. We can use "bfloat16"
+            on supported GPUs for faster computation and reduced memory usage.
+
+    Returns:
+        Array of shape ``(P, rank)`` with sorted distances per probe. If
+        ``return_indices`` is True, returns a tuple ``(distances, indices)``
+        where ``indices`` has shape ``(P, rank)`` containing gallery indices.
+    """
+    probes = np.asarray(probes)
+    if np.issubdtype(probes.dtype, np.integer):
+        probes = probes.astype(np.float32)
+    gallery = np.asarray(gallery)
+    if np.issubdtype(gallery.dtype, np.integer):
+        gallery = gallery.astype(np.float32)
+
+    p = len(probes)
+    g = len(gallery)
+
+    if rank is None:
+        rank = g
+    rank = min(rank, g)
+
+    if batch_size is None:
+        row_batch_size = p
+    else:
+        row_batch_size = max(1, int(batch_size) // g)
+
+    return _probe_gallery_distances_numpy(
+        probes=probes,
+        gallery=gallery,
+        dist=dist,
+        rank=rank,
+        row_batch_size=row_batch_size,
+    )
+
+
+def _probe_gallery_distances_numpy(
+    probes: np.ndarray,
+    gallery: np.ndarray,
+    dist: str,
+    rank: int,
+    row_batch_size: int,
+) -> np.ndarray:
+    dist_fn_dict = {
+        "l2_squared": l2_squared_matrix,
+        "l2": l2_matrix,
+        "cosine": cosine_matrix,
+    }
+    if dist not in dist_fn_dict:
+        raise ValueError(f"Unknown distance: {dist}")
+    dist_fn = dist_fn_dict[dist]
+
+    p = len(probes)
+    g = len(gallery)
+    result = np.empty((p, rank), dtype=probes.dtype)
+
+    for start in range(0, p, row_batch_size):
+        end = min(start + row_batch_size, p)
+        batch_dists = dist_fn(probes[start:end], gallery)  # (batch, G)
+
+        if rank < g:
+            # Use argpartition for O(G) selection of top-rank elements
+            top_idx = np.argpartition(batch_dists, rank, axis=1)[:, :rank]
+            top_dists = np.take_along_axis(batch_dists, top_idx, axis=1)
+        else:
+            top_dists = batch_dists
+        top_dists.sort(axis=1)
+        result[start:end] = top_dists
+
+    return result

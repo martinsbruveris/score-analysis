@@ -475,14 +475,16 @@ def probe_gallery_distances(
         compute_fn = _probe_gallery_distances_numpy
         kwargs = {}
 
-    return compute_fn(
+    result = compute_fn(
         probes=probes,
         gallery=gallery,
         dist=dist,
         rank=rank,
         row_batch_size=row_batch_size,
+        return_indices=return_indices,
         **kwargs,
     )
+    return result if return_indices else result[0]
 
 
 def _probe_gallery_distances_numpy(
@@ -491,7 +493,8 @@ def _probe_gallery_distances_numpy(
     dist: str,
     rank: int,
     row_batch_size: int,
-) -> np.ndarray:
+    return_indices: bool,
+) -> tuple[np.ndarray, np.ndarray | None]:
     dist_fn_dict = {
         "l2_squared": l2_squared_matrix,
         "l2": l2_matrix,
@@ -504,6 +507,10 @@ def _probe_gallery_distances_numpy(
     p = len(probes)
     g = len(gallery)
     result = np.empty((p, rank), dtype=probes.dtype)
+    if return_indices:
+        result_idx = np.empty((p, rank), dtype=np.intp)
+    else:
+        result_idx = None
 
     for start in range(0, p, row_batch_size):
         end = min(start + row_batch_size, p)
@@ -514,11 +521,16 @@ def _probe_gallery_distances_numpy(
             top_idx = np.argpartition(batch_dists, rank, axis=1)[:, :rank]
             top_dists = np.take_along_axis(batch_dists, top_idx, axis=1)
         else:
+            top_idx = np.broadcast_to(np.arange(g), batch_dists.shape).copy()
             top_dists = batch_dists
-        top_dists.sort(axis=1)
-        result[start:end] = top_dists
 
-    return result
+        # Sort the selected elements
+        sort_order = np.argsort(top_dists, axis=1)
+        result[start:end] = np.take_along_axis(top_dists, sort_order, axis=1)
+        if return_indices:
+            result_idx[start:end] = np.take_along_axis(top_idx, sort_order, axis=1)
+
+    return result, result_idx
 
 
 def _probe_gallery_distances_torch(
@@ -527,8 +539,9 @@ def _probe_gallery_distances_torch(
     dist: str,
     rank: int,
     row_batch_size: int,
+    return_indices: bool,
     torch_dtype: "torch.dtype",
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray | None]:
     import torch
 
     def _l2_squared_matrix(x, y, x_n, y_n):
@@ -568,6 +581,10 @@ def _probe_gallery_distances_torch(
     p = len(probes)
     g = len(gallery)
     result = torch.empty((p, rank), dtype=torch_dtype, device=device)
+    if return_indices:
+        result_idx = torch.empty((p, rank), dtype=torch.long, device=device)
+    else:
+        result_idx = None
 
     with torch.inference_mode():
         for start in range(0, p, row_batch_size):
@@ -577,15 +594,21 @@ def _probe_gallery_distances_torch(
             )
 
             if rank < g:
-                result[start:end] = torch.topk(
-                    batch_dists, rank, dim=1, largest=False, sorted=True
-                ).values
+                topk = torch.topk(batch_dists, rank, dim=1, largest=False, sorted=True)
+                result[start:end] = topk.values
+                if return_indices:
+                    result_idx[start:end] = topk.indices
             else:
-                result[start:end] = torch.sort(batch_dists, dim=1).values
+                sorted_result = torch.sort(batch_dists, dim=1)
+                result[start:end] = sorted_result.values
+                if return_indices:
+                    result_idx[start:end] = sorted_result.indices
 
     result = result.cpu().float().numpy().astype(input_dtype)
+    if return_indices:
+        result_idx = result_idx.cpu().numpy().astype(np.intp)
 
     if dist == "cosine":
         result += 1
 
-    return result
+    return result, result_idx

@@ -230,3 +230,31 @@ def test_probe_gallery_torch_dtype():
         probe, gallery, use_torch=True, torch_dtype="float32"
     )
     assert results.dtype == np.float64
+
+
+@pytest.mark.parametrize("use_torch", [False, True])
+@pytest.mark.parametrize("rank", [None, 1, 2])
+def test_probe_gallery_distances_indices(use_torch, rank):
+    """Test that return_indices returns the correct gallery indices."""
+    probe = np.array([[0], [10]])
+    gallery = np.array([[1], [4], [8]])
+
+    result, indices = probe_gallery_distances(
+        probe,
+        gallery,
+        dist="l2",
+        batch_size=None,
+        use_torch=use_torch,
+        rank=rank,
+        return_indices=True,
+    )
+
+    l2_matrix = np.array([[1, 4, 8], [2, 6, 9]])
+    all_indices = np.array([[0, 1, 2], [2, 1, 0]])
+
+    r = 3 if rank is None else rank
+    expected_dists = l2_matrix[:, :r]
+    expected_indices = all_indices[:, :r]
+
+    assert np.array_equal(result, expected_dists)
+    assert np.array_equal(indices, expected_indices)

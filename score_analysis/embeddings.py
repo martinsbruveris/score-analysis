@@ -178,9 +178,9 @@ def embedding_distances(
     nb_easy_neg = nb_all_neg - len(neg_dists)
 
     scores = Scores(
-        pos_dists, 
-        neg_dists, 
-        nb_easy_pos=nb_easy_pos, 
+        pos_dists,
+        neg_dists,
+        nb_easy_pos=nb_easy_pos,
         nb_easy_neg=nb_easy_neg,
         score_class="neg",  # For distances, lower is better.
         equal_class="neg",

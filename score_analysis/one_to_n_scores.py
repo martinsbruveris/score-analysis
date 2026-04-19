@@ -30,11 +30,15 @@ What data structure do I want?
 from __future__ import annotations
 
 import operator
-from typing import Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from score_analysis.scores import BinaryLabel
+from .embeddings import probe_gallery_distances
+from .scores import BinaryLabel
+
+if TYPE_CHECKING:  # pragma: no cover
+    import torch
 
 OPERATOR_MAP = {
     ("pos", "pos"): operator.lt,
@@ -54,10 +58,37 @@ class OneToNScores:
         pos_labels: np.ndarray,
         neg_labels: np.ndarray,
         gallery_labels: np.ndarray,
-        score_class: Union[BinaryLabel, str] = "pos",
-        equal_class: Union[BinaryLabel, str] = "pos",
+        score_class: BinaryLabel | str = "pos",
+        equal_class: BinaryLabel | str = "pos",
         is_sorted: bool = False,
     ):
+        """Scores for one-to-N matching (identification).
+
+        Stores per-probe scores against the top-ranked gallery items, split into
+        mated probes (identity exists in gallery) and non-mated probes (identity
+        does not exist in gallery). Rows are sorted so that the best match comes
+        first (descending for ``score_class="pos"``, ascending for
+        ``score_class="neg"``).
+
+        Args:
+            pos: Array of shape ``(Kp, rank)`` with scores for mated probes.
+            neg: Array of shape ``(Kn, rank)`` with scores for non-mated probes.
+            pos_idx: Array of shape ``(Kp, rank)`` with indices of gallery labels
+                corresponding to each score in ``pos``.
+            neg_idx: Array of shape ``(Kn, rank)`` with indices of gallery labels
+                corresponding to each score in ``neg``.
+            pos_labels: Array of shape ``(Kp,)`` with probe labels for mated
+                probes.
+            neg_labels: Array of shape ``(Kn,)`` with probe labels for non-mated
+                probes.
+            gallery_labels: Array of shape ``(G,)`` with gallery identity labels.
+            score_class: Do scores indicate membership of the positive or the
+                negative class? Use ``"neg"`` for distances, ``"pos"`` for similarity
+                scores.
+            equal_class: Do samples with score equal to the threshold get assigned
+                to the positive or negative class?
+            is_sorted: If True, assume each row is already sorted best-first.
+        """
         self.pos = np.asarray(pos)  # (Kp, r)  mated distances
         self.neg = np.asarray(neg)  # (Kn, r)  non-mated distances
         self.pos_idx = np.asarray(pos_idx)  # (Kp, r) indices
@@ -79,7 +110,9 @@ class OneToNScores:
             self.neg, self.neg_idx = self._sort_rows(self.neg, self.neg_idx)
 
     def _sort_rows(self, scores, idx):
-        if scores.ndim < 2 or scores.shape[-1] == 0:
+        if scores.ndim < 2:
+            raise ValueError("Scores must be 2D matrix.")
+        if scores.shape[-1] == 0:
             return scores, idx
         order = np.argsort(scores, axis=-1)
         if self.score_class == BinaryLabel.pos:
@@ -118,15 +151,39 @@ class OneToNScores:
     @staticmethod
     def from_matrix(
         matrix: np.ndarray,
-        probes: np.ndarray,
-        gallery: np.ndarray,
-        rank: int = 1,
-        score_class: Union[BinaryLabel, str] = "pos",
-        equal_class: Union[BinaryLabel, str] = "pos",
+        probe_labels: np.ndarray,
+        gallery_labels: np.ndarray,
+        rank: int | None = 1,
+        score_class: BinaryLabel | str = "pos",
+        equal_class: BinaryLabel | str = "pos",
     ):
+        """Construct from a precomputed probe-gallery score matrix. We assume that this
+        is the full matrix of scores.
+
+        Sorts each probe's scores across the gallery, keeps the top ``rank``
+        matches, and splits probes into mated and non-mated.
+
+        Args:
+            matrix: Score matrix of shape ``(P, G)`` where entry ``(i, j)`` is
+                the score between probe ``i`` and gallery item ``j``.
+            probe_labels: Array of shape ``(P,)`` with identity labels for each
+                probe.
+            gallery_labels: Array of shape ``(G,)`` with identity labels for each
+                gallery item.
+            rank: Number of top gallery matches to keep per probe. If ``None``,
+                all matches are kept.
+            score_class: Do scores indicate membership of the positive or the
+                negative class? Use ``"neg"`` for distances, ``"pos"`` for similarity
+                scores.
+            equal_class: Do samples with score equal to the threshold get assigned
+                to the positive or negative class?
+
+        Returns:
+            A :class:`OneToNScores` instance.
+        """
         matrix = np.asarray(matrix, dtype=float)  # (P, G)
-        probes = np.asarray(probes)  # (P,)
-        gallery = np.asarray(gallery)  # (G,)
+        probe_labels = np.asarray(probe_labels)  # (P,)
+        gallery_labels = np.asarray(gallery_labels)  # (G,)
 
         # Sort each probe's scores across gallery, best matches first.
         # For score_class="pos": descending (higher is better).
@@ -136,21 +193,22 @@ class OneToNScores:
             sort_idx = sort_idx[:, ::-1]
 
         # Keep only top-r matches
-        sort_idx = sort_idx[:, :rank]
-        sorted_scores = np.take_along_axis(matrix, sort_idx, axis=1)
-        sorted_gallery = gallery[sort_idx]
+        if rank is not None:
+            sort_idx = sort_idx[:, :rank]
+        sorted_matrix = np.take_along_axis(matrix, sort_idx, axis=1)
+        sorted_gallery_labels = gallery_labels[sort_idx]
 
         # Split into mated (pos) and non-mated (neg) probes
-        is_mated = np.isin(probes, gallery)
+        is_mated = np.isin(probe_labels, gallery_labels)
 
         return OneToNScores(
-            pos=sorted_scores[is_mated],
-            neg=sorted_scores[~is_mated],
-            pos_idx=sorted_gallery[is_mated],
-            neg_idx=sorted_gallery[~is_mated],
-            pos_labels=probes[is_mated],
-            neg_labels=probes[~is_mated],
-            gallery_labels=gallery,
+            pos=sorted_matrix[is_mated],
+            neg=sorted_matrix[~is_mated],
+            pos_idx=sorted_gallery_labels[is_mated],
+            neg_idx=sorted_gallery_labels[~is_mated],
+            pos_labels=probe_labels[is_mated],
+            neg_labels=probe_labels[~is_mated],
+            gallery_labels=gallery_labels,
             score_class=score_class,
             equal_class=equal_class,
             is_sorted=True,
@@ -161,11 +219,76 @@ class OneToNScores:
         probe_emb: np.ndarray,
         gallery_emb: np.ndarray,
         probe_labels: np.ndarray,
-        gallery_label: np.ndarray,
+        gallery_labels: np.ndarray,
+        *,
         dist: str = "l2_squared",
-        rank: int = 1,
-        equal_class: Union[BinaryLabel, str] = "neg",
-    ): ...
+        rank: int | None = 1,
+        equal_class: BinaryLabel | str = "neg",
+        batch_size: int | None = 1e8,
+        use_torch: bool = False,
+        torch_dtype: "torch.dtype | str" = "float32",
+    ):
+        """Construct from probe and gallery embeddings.
+
+        Computes pairwise distances using :func:`probe_gallery_distances`, keeps
+        the ``rank`` closest gallery items per probe, and splits probes into
+        mated and non-mated. The resulting ``score_class`` is always ``"neg"``
+        (lower distance is a better match).
+
+        Args:
+            probe_emb: Array of shape ``(P, D)`` with probe embeddings.
+            gallery_emb: Array of shape ``(G, D)`` with gallery embeddings.
+            probe_labels: Array of shape ``(P,)`` with identity labels for each
+                probe.
+            gallery_labels: Array of shape ``(G,)`` with identity labels for each
+                gallery item.
+            dist: Distance metric. One of ``"l2_squared"``, ``"l2"`` or
+                ``"cosine"``.
+            rank: Number of closest gallery items to keep per probe. If ``None``,
+                all gallery items are kept.
+            equal_class: Do samples with score equal to the threshold get assigned
+                to the positive or negative class?
+            batch_size: Maximum number of distances to keep in memory at once.
+                Controls the probe batch size as ``batch_size // G``. If
+                ``None``, all distances are computed at once.
+            use_torch: Whether to use PyTorch for distance computation.
+            torch_dtype: Data type for PyTorch computations.
+
+        Returns:
+            A :class:`OneToNScores` instance.
+        """
+        probe_labels = np.asarray(probe_labels)
+        gallery_labels = np.asarray(gallery_labels)
+
+        distances, indices = probe_gallery_distances(
+            probes=probe_emb,
+            gallery=gallery_emb,
+            dist=dist,
+            rank=rank,
+            batch_size=batch_size,
+            return_indices=True,
+            use_torch=use_torch,
+            torch_dtype=torch_dtype,
+        )
+
+        # Map gallery indices to gallery labels
+        sorted_gallery = gallery_labels[indices]
+
+        # Split into mated (pos) and non-mated (neg) probes
+        is_mated = np.isin(probe_labels, gallery_labels)
+
+        return OneToNScores(
+            pos=distances[is_mated],
+            neg=distances[~is_mated],
+            pos_idx=sorted_gallery[is_mated],
+            neg_idx=sorted_gallery[~is_mated],
+            pos_labels=probe_labels[is_mated],
+            neg_labels=probe_labels[~is_mated],
+            gallery_labels=gallery_labels,
+            score_class="neg",
+            equal_class=equal_class,
+            is_sorted=True,
+        )
 
     def fpir(self, threshold: np.ndarray) -> np.ndarray: ...
 

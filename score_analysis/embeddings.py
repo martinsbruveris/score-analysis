@@ -485,7 +485,7 @@ def probe_gallery_distances(
         compute_fn = _probe_gallery_distances_numpy
         kwargs = {}
 
-    result = compute_fn(
+    matrix, indices = compute_fn(
         probes=probes,
         gallery=gallery,
         dist=dist,
@@ -494,7 +494,7 @@ def probe_gallery_distances(
         return_indices=return_indices,
         **kwargs,
     )
-    return result if return_indices else result[0]
+    return (matrix, indices) if return_indices else matrix
 
 
 def _probe_gallery_distances_numpy(

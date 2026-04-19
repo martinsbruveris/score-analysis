@@ -40,11 +40,12 @@ from .scores import BinaryLabel
 if TYPE_CHECKING:  # pragma: no cover
     import torch
 
+
 OPERATOR_MAP = {
-    ("pos", "pos"): operator.lt,
-    ("pos", "neg"): operator.le,
-    ("neg", "pos"): operator.le,
-    ("neg", "neg"): operator.lt,
+    (BinaryLabel.pos, BinaryLabel.pos): operator.le,
+    (BinaryLabel.pos, BinaryLabel.neg): operator.lt,
+    (BinaryLabel.neg, BinaryLabel.pos): operator.lt,
+    (BinaryLabel.neg, BinaryLabel.neg): operator.le,
 }
 
 
@@ -99,9 +100,9 @@ class OneToNScores:
         self.score_class = BinaryLabel(score_class)
         self.equal_class = BinaryLabel(equal_class)
 
-        self.threshold_fn = OPERATOR_MAP[
-            (self.score_class.value, self.equal_class.value)
-        ]
+        # Use threshold function to find matches via
+        #    threshold_fn(score, threshold) == True
+        self.threshold_fn = OPERATOR_MAP[self.score_class, self.equal_class]
 
         if not is_sorted:
             # Sort each row of pos and neg independently.

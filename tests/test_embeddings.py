@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pytest
 import torch
@@ -129,6 +131,21 @@ def test_get_torch_dtype():
     assert _get_torch_dtype(torch.float16) == torch.float16
     with pytest.raises(TypeError):
         _get_torch_dtype(3)
+
+
+@pytest.mark.parametrize("use_torch", [False, True])
+def test_embedding_distances_non_writeable_input(use_torch):
+    """Non-writeable arrays should not trigger warnings."""
+    emb = np.array([[1.0], [2.0], [3.0]], dtype=np.float32)
+    emb.flags.writeable = False
+    labels = np.array([0, 0, 1])
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        scores = embedding_distances(emb, labels, use_torch=use_torch)
+
+    assert len(scores.pos) == 1
+    assert len(scores.neg) == 2
 
 
 @pytest.mark.parametrize("use_torch", [False, True])

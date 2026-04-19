@@ -2,6 +2,7 @@
 Functions to compute distances and similarities between embeddings.
 """
 
+import warnings
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -177,7 +178,12 @@ def embedding_distances(
     nb_easy_neg = nb_all_neg - len(neg_dists)
 
     scores = Scores(
-        pos_dists, neg_dists, nb_easy_pos=nb_easy_pos, nb_easy_neg=nb_easy_neg
+        pos_dists, 
+        neg_dists, 
+        nb_easy_pos=nb_easy_pos, 
+        nb_easy_neg=nb_easy_neg,
+        score_class="neg",  # For distances, lower is better.
+        equal_class="neg",
     )
 
     if return_indices:
@@ -335,7 +341,11 @@ def _embedding_distances_torch(
     input_dtype = emb.dtype
     device = _get_torch_device()
 
-    emb = torch.as_tensor(emb, dtype=torch_dtype, device=device)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message="The given NumPy array is not writable"
+        )
+        emb = torch.as_tensor(emb, dtype=torch_dtype, device=device)
     if dist == "cosine":
         emb_norm = torch.norm(emb, dim=-1, keepdim=True)
         emb = emb / torch.clamp(emb_norm, min=1e-10)
@@ -565,8 +575,12 @@ def _probe_gallery_distances_torch(
     input_dtype = probes.dtype
     device = _get_torch_device()
 
-    probes = torch.as_tensor(probes, dtype=torch_dtype, device=device)
-    gallery = torch.as_tensor(gallery, dtype=torch_dtype, device=device)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message="The given NumPy array is not writable"
+        )
+        probes = torch.as_tensor(probes, dtype=torch_dtype, device=device)
+        gallery = torch.as_tensor(gallery, dtype=torch_dtype, device=device)
 
     if dist == "cosine":
         probe_norm = torch.norm(probes, dim=-1, keepdim=True)

@@ -112,6 +112,8 @@ class OneToNScores:
             self.pos, self.pos_idx = self._sort_rows(self.pos, self.pos_idx)
             self.neg, self.neg_idx = self._sort_rows(self.neg, self.neg_idx)
 
+            self._sort_neg()
+
     def _sort_rows(self, scores, idx):
         if scores.ndim < 2:
             raise ValueError("Scores must be 2D matrix.")
@@ -124,6 +126,15 @@ class OneToNScores:
             np.take_along_axis(scores, order, axis=-1),
             np.take_along_axis(idx, order, axis=-1),
         )
+
+    def _sort_neg(self):
+        """Sort negative scores by first score. Used for efficient FPIR computation."""
+        if self.neg.shape[0] == 0:
+            return
+        order = np.argsort(self.neg[:, 0])
+        self.neg = self.neg[order]
+        self.neg_idx = self.neg_idx[order]
+        self.neg_labels = self.neg_labels[order]
 
     def __eq__(self, other: OneToNScores) -> bool:
         """
@@ -206,7 +217,7 @@ class OneToNScores:
         # Split into mated (pos) and non-mated (neg) probes
         is_mated = np.isin(probe_labels, gallery_labels)
 
-        return OneToNScores(
+        scores = OneToNScores(
             pos=sorted_matrix[is_mated],
             neg=sorted_matrix[~is_mated],
             pos_idx=sorted_gallery_labels[is_mated],
@@ -218,6 +229,8 @@ class OneToNScores:
             equal_class=equal_class,
             is_sorted=True,
         )
+        scores._sort_neg()
+        return scores
 
     @staticmethod
     def from_embeddings(
@@ -282,7 +295,7 @@ class OneToNScores:
         # Split into mated (pos) and non-mated (neg) probes
         is_mated = np.isin(probe_labels, gallery_labels)
 
-        return OneToNScores(
+        scores = OneToNScores(
             pos=distances[is_mated],
             neg=distances[~is_mated],
             pos_idx=sorted_gallery[is_mated],
@@ -294,6 +307,8 @@ class OneToNScores:
             equal_class=equal_class,
             is_sorted=True,
         )
+        scores._sort_neg()
+        return scores
 
     def fpir(self, threshold: np.ndarray) -> np.ndarray:
         scores = Scores(
@@ -301,8 +316,8 @@ class OneToNScores:
             neg=self.neg[:, 0],
             score_class=self.score_class,
             equal_class=self.equal_class,
+            is_sorted=True,
         )
-        # TODO: Add sorting of negative scores at construction time.
         return scores.fpr(threshold)
 
     def fnir(self, threshold: np.ndarray) -> np.ndarray: ...

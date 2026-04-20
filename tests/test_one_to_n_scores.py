@@ -73,21 +73,40 @@ def test_from_embeddings(rank):
     assert scores_from_matrix == scores_from_emb
 
 
-# def test_fpir(score_class, equal_class):
-#     scores = OneToNScores(
-#         pos=[],
-#         neg=[0, 1, 1, 1, 2, 3, 4, 5, 6, 6],
-#         pos_idx=[],
-#         neg_idx=[],
-#         probes=[0, 1, 2, 3, 4],
-#         gallery=[10, 11, 12, 13, 14],
-#         score_class=score_class,
-#         equal_class=equal_class,
-#     )
+def test_fpir():
+    matrix = [
+        [0, 1, 2, 3, 4],
+        [1, 1, 2, 3, 5],
+        [2, 3, 4, 4, 6],
+        [3, 4, 5, 6, 7],
+    ]
+    scores = OneToNScores.from_matrix(
+        matrix=matrix,
+        probe_labels=[0, 0, 0, 0],
+        gallery_labels=[1, 2, 3, 4, 5],
+        rank=None,
+        score_class="neg",
+        equal_class="neg",
+    )
+    assert np.array_equal(scores.fpir(threshold=0.75), 0.25)
+    assert np.array_equal(scores.fpir(threshold=[1.5, 2.5]), [0.5, 0.75])
+    # TODO: Fix the unit test.
+    # assert np.array_equal(scores.fpir(threshold=2), 0.75)  # Threshold equals score
 
+    # scores.equal_class = BinaryLabel.pos
+    # assert np.array_equal(scores.fpir(threshold=2), 0.5)  # We don't count it any more
 
-#     dist_matrix = [
-#         [0, 1, 2, 3, 4],
-#         [1, 1, 2, 3, 4],
-#         []
-#     ]
+    scores = OneToNScores.from_matrix(
+        matrix=matrix,
+        probe_labels=[0, 0, 0, 0],
+        gallery_labels=[1, 2, 3, 4, 5],
+        rank=None,
+        score_class="pos",
+        equal_class="pos",
+    )
+    assert np.array_equal(scores.fpir(threshold=4.5), 0.75)
+    assert np.array_equal(scores.fpir(threshold=[5.5, 6.5]), [0.5, 0.25])
+    # assert np.array_equal(scores.fpir(threshold=6), 0.75)  # Threshold equals score
+
+    # scores.equal_class = BinaryLabel.neg
+    # assert np.array_equal(scores.fpir(threshold=6), 0.5)  # We don't count it any more

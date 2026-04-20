@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from .embeddings import probe_gallery_distances
-from .scores import BinaryLabel
+from .scores import BinaryLabel, Scores
 
 if TYPE_CHECKING:  # pragma: no cover
     import torch
@@ -291,6 +291,14 @@ class OneToNScores:
             is_sorted=True,
         )
 
-    def fpir(self, threshold: np.ndarray) -> np.ndarray: ...
+    def fpir(self, threshold: np.ndarray) -> np.ndarray:
+        scores = Scores(
+            pos=[],
+            neg=self.neg[:, 0],
+            score_class=self.score_class,
+            equal_class=self.equal_class,
+        )
+        # TODO: Add sorting of negative scores at construction time.
+        return scores.fpr(threshold)
 
     def fnir(self, threshold: np.ndarray) -> np.ndarray: ...

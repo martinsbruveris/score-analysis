@@ -22,6 +22,9 @@ class BinaryLabel(Enum):
     def __eq__(self, other):
         return self.value == BinaryLabel(other).value
 
+    def __hash__(self):
+        return hash(self.value)
+
 
 SAMPLING_METHOD_REPLACEMENT = "replacement"
 SAMPLING_METHOD_SINGLE_PASS = "single_pass"

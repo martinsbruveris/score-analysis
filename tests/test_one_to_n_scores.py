@@ -112,7 +112,34 @@ def test_fpir():
     assert np.array_equal(scores.fpir(threshold=6), 0.5)  # We don't count it any more
 
 
+# fmt: off
+@pytest.mark.parametrize(
+    "shape",
+    [(), (1,), (1, 2), (3, 4)],
+)
+# fmt: on
+def test_fpir_shapes(shape):
+    """Test that FPIR works with different shapes of thresholds."""
+    rng = np.random.default_rng(42)
+    matrix = rng.standard_normal((5, 8))
+    scores = OneToNScores.from_matrix(
+        matrix=matrix,
+        probe_labels=range(5),
+        gallery_labels=range(10, 18),
+        rank=None,
+        score_class="neg",
+        equal_class="neg",
+    )
+    threshold = rng.random(shape)
+
+    result = scores.fpir(threshold=threshold)
+    assert np.shape(result) == shape
+    if shape == ():
+        assert np.isscalar(result)
+
+
 def test_fnir():
+    """Test basic FNIR calculations."""
     matrix = [
         [0, 1, 2, 3, 4],
         [0, 1, 2, 3, 5],
@@ -155,7 +182,7 @@ def test_fnir():
 )
 # fmt: on
 def test_fnir_shapes(threshold_shape, rank_shape, expected_shape):
-    """Test that fnir works with different shapes of thresholds and ranks."""
+    """Test that FNIR works with different shapes of thresholds and ranks."""
     rng = np.random.default_rng(42)
     matrix = rng.standard_normal((5, 8))
     scores = OneToNScores.from_matrix(

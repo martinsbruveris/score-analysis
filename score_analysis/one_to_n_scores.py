@@ -331,6 +331,17 @@ class OneToNScores:
         return scores
 
     def fpir(self, threshold: np.ndarray) -> np.ndarray:
+        """False Positive Identification Rate for non-mated probes at threshold(s).
+
+        Proportion of non-mated probes whose best gallery match passes the
+        threshold, i.e., would be incorrectly accepted as a match.
+
+        Args:
+            threshold: Decision threshold(s). Can be a scalar or array.
+
+        Returns:
+            FPIR value(s) with the same shape as ``threshold``.
+        """
         scores = Scores(
             pos=[],
             neg=self.neg[:, 0],
@@ -346,6 +357,25 @@ class OneToNScores:
         threshold: np.ndarray | None = None,
         rank: np.ndarray | None = None,
     ) -> np.ndarray:
+        """False Negative Identification Rate for mated probes.
+
+        Proportion of mated probes whose true gallery mate is identified, i.e.,
+        the mate's score passes the threshold and/or the mate appears within the
+        top ``rank`` positions.
+
+        At least one of ``threshold`` or ``rank`` must be provided. When both
+        are given, the mate must satisfy both criteria. The output shape is
+        ``(*threshold.shape, *rank.shape)``.
+
+        Args:
+            threshold: Decision threshold(s). Can be a scalar or array.
+            rank: Rank cutoff(s). The mate must appear within the top ``rank``
+                positions. Can be a scalar or array.
+
+        Returns:
+            Identification rate with shape ``(*threshold.shape, *rank.shape)``.
+            Returns a Python scalar when both inputs are scalar or ``None``.
+        """
         if threshold is None and rank is None:
             raise ValueError("At least one of threshold or rank must be provided.")
 

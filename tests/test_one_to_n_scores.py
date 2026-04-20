@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from score_analysis.one_to_n_scores import OneToNScores
+from score_analysis.scores import BinaryLabel
 
 
 @pytest.mark.parametrize("rank", [None, 1, 2, 3])
@@ -90,11 +91,10 @@ def test_fpir():
     )
     assert np.array_equal(scores.fpir(threshold=0.75), 0.25)
     assert np.array_equal(scores.fpir(threshold=[1.5, 2.5]), [0.5, 0.75])
-    # TODO: Fix the unit test.
-    # assert np.array_equal(scores.fpir(threshold=2), 0.75)  # Threshold equals score
+    assert np.array_equal(scores.fpir(threshold=2), 0.5)  # Threshold equals score
 
-    # scores.equal_class = BinaryLabel.pos
-    # assert np.array_equal(scores.fpir(threshold=2), 0.5)  # We don't count it any more
+    scores.equal_class = BinaryLabel.pos
+    assert np.array_equal(scores.fpir(threshold=2), 0.75)  # We don't count it any more
 
     scores = OneToNScores.from_matrix(
         matrix=matrix,
@@ -102,11 +102,11 @@ def test_fpir():
         gallery_labels=[1, 2, 3, 4, 5],
         rank=None,
         score_class="pos",
-        equal_class="pos",
+        equal_class="neg",
     )
     assert np.array_equal(scores.fpir(threshold=4.5), 0.75)
     assert np.array_equal(scores.fpir(threshold=[5.5, 6.5]), [0.5, 0.25])
-    # assert np.array_equal(scores.fpir(threshold=6), 0.75)  # Threshold equals score
+    assert np.array_equal(scores.fpir(threshold=6), 0.25)  # Threshold equals score
 
-    # scores.equal_class = BinaryLabel.neg
-    # assert np.array_equal(scores.fpir(threshold=6), 0.5)  # We don't count it any more
+    scores.equal_class = BinaryLabel.pos
+    assert np.array_equal(scores.fpir(threshold=6), 0.5)  # We don't count it any more

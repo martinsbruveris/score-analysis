@@ -83,11 +83,13 @@ class OneToNScores:
             neg_labels: Array of shape ``(Kn,)`` with probe labels for non-mated
                 probes.
             gallery_labels: Array of shape ``(G,)`` with gallery identity labels.
-            score_class: Do scores indicate membership of the positive or the
-                negative class? Use ``"neg"`` for distances, ``"pos"`` for similarity
-                scores.
-            equal_class: Do samples with score equal to the threshold get assigned
-                to the positive or negative class?
+            score_class: Do higher scores indicate higher likelyhood of matching
+                (``"pos""``, use, e.g., for cosine similarity) or do lower scores
+                indicate higher likelyhood of matching (``"neg""``, use, e.g., for
+                distances)? Use ``"pos"`` for similarity scores, ``"neg"`` for
+                distances.
+            equal_class: Do samples with score equal to the threshold get counted as
+                a match (``"pos"``) or a non-match (``"neg"``)?
             is_sorted: If True, assume each row is already sorted best-first.
         """
         self.pos = np.asarray(pos)  # (Kp, r)  mated distances
@@ -173,11 +175,13 @@ class OneToNScores:
                 gallery item.
             rank: Number of top gallery matches to keep per probe. If ``None``,
                 all matches are kept.
-            score_class: Do scores indicate membership of the positive or the
-                negative class? Use ``"neg"`` for distances, ``"pos"`` for similarity
-                scores.
-            equal_class: Do samples with score equal to the threshold get assigned
-                to the positive or negative class?
+            score_class: Do higher scores indicate higher likelyhood of matching
+                (``"pos""``, use, e.g., for cosine similarity) or do lower scores
+                indicate higher likelyhood of matching (``"neg""``, use, e.g., for
+                distances)? Use ``"pos"`` for similarity scores, ``"neg"`` for
+                distances.
+            equal_class: Do samples with score equal to the threshold get counted as
+                a match (``"pos"``) or a non-match (``"neg"``)?
 
         Returns:
             A :class:`OneToNScores` instance.
@@ -247,8 +251,8 @@ class OneToNScores:
                 ``"cosine"``.
             rank: Number of closest gallery items to keep per probe. If ``None``,
                 all gallery items are kept.
-            equal_class: Do samples with score equal to the threshold get assigned
-                to the positive or negative class?
+            equal_class: Do samples with score equal to the threshold get counted as
+                a match (``"pos"``) or a non-match (``"neg"``)?
             batch_size: Maximum number of distances to keep in memory at once.
                 Controls the probe batch size as ``batch_size // G``. If
                 ``None``, all distances are computed at once.

@@ -136,6 +136,30 @@ class OneToNScores:
         self.neg_idx = self.neg_idx[order]
         self.neg_labels = self.neg_labels[order]
 
+    def __str__(self) -> str:
+        Kp, r = self.pos.shape
+        Kn = self.neg.shape[0]
+        G = len(self.gallery_labels)
+        n = 10  # Max rows to display
+        with np.printoptions(threshold=n * r, edgeitems=n // 2):
+            lines = [
+                f"OneToNScores("
+                f"mated={Kp}, non_mated={Kn}, gallery={G}, rank={r}, "
+                f"score_class={self.score_class.value}, "
+                f"equal_class={self.equal_class.value})",
+                f"  pos={self.pos[:n]}",
+                f"  pos_idx={self.pos_idx[:n]}",
+                f"  pos_labels={self.pos_labels[:n]}",
+                f"  neg={self.neg[:n]}",
+                f"  neg_idx={self.neg_idx[:n]}",
+                f"  neg_labels={self.neg_labels[:n]}",
+                f"  gallery_labels={self.gallery_labels[:n]}",
+            ]
+        return "\n".join(lines)
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
     def __eq__(self, other: OneToNScores) -> bool:
         """
         Tests if two OneToNScores objects are equal. Equality is tested exactly,
@@ -325,30 +349,47 @@ class OneToNScores:
         if threshold is None and rank is None:
             raise ValueError("At least one of threshold or rank must be provided.")
 
-        Kp = self.pos.shape[0]
-
-        # For each mated probe, find the best-ranked mate in the stored results
-        gallery_at_idx = self.gallery_labels[self.pos_idx]  # (Kp, r)
-        mate_mask = gallery_at_idx == self.pos_labels[:, np.newaxis]  # (Kp, r)
-        mate_found = mate_mask.any(axis=1)  # (Kp,)
-        mate_pos = np.argmax(mate_mask, axis=1)  # (Kp,)
-        mate_score = self.pos[np.arange(Kp), mate_pos]  # (Kp,)
-
-        # A probe is identified only if its mate was found in the stored results
-        identified = mate_found.copy()  # (Kp,)
-
-        if rank is not None:
-            identified &= mate_pos < rank
-
+        isscalar = (threshold is None or np.isscalar(threshold)) and (
+            rank is None or np.isscalar(rank)
+        )
         if threshold is not None:
             threshold = np.asarray(threshold, dtype=float)
-            passes = self.threshold_fn(
-                mate_score.reshape(-1, *([1] * threshold.ndim)),
-                threshold,
-            )
-            identified = identified.reshape(-1, *([1] * threshold.ndim)) & passes
+        if rank is not None:
+            rank = np.asarray(rank)
+
+        Kp = self.pos.shape[0]
+
+        # Truncate to max rank for efficiency
+        max_rank = int(np.max(rank)) if rank is not None else self.pos.shape[1]
+        pos_idx = self.pos_idx[:, :max_rank]
+
+        # For each mated probe, find the best-ranked mate in the stored results
+        gallery_at_idx = self.gallery_labels[pos_idx]  # (Kp, max_rank)
+        is_mate = gallery_at_idx == self.pos_labels[:, np.newaxis]  # (Kp, max_rank)
+        mate_found = is_mate.any(axis=1)  # (Kp,)
+        # argmax returns the first True, i.e., the best-ranked mate
+        mate_pos = np.argmax(is_mate, axis=1)  # (Kp,)
+        mate_score = self.pos[np.arange(Kp), mate_pos]  # (Kp,)
+
+        # Output shape is (*threshold.shape, *rank.shape) via outer-product
+        # broadcasting along the Kp axis.
+        t_ndim = threshold.ndim if threshold is not None else 0
+        r_ndim = rank.ndim if rank is not None else 0
+        extra = t_ndim + r_ndim
+
+        identified = mate_found.reshape((Kp, *([1] * extra)))
+
+        if threshold is not None:
+            ms = mate_score.reshape((Kp, *([1] * extra)))
+            th = threshold.reshape((*threshold.shape, *([1] * r_ndim)))
+            identified = identified & self.threshold_fn(ms, th)
+
+        if rank is not None:
+            mp = mate_pos.reshape((Kp, *([1] * extra)))
+            rk = rank.reshape((*([1] * t_ndim), *rank.shape))
+            identified = identified & (mp < rk)
 
         result = np.asarray(identified, dtype=float).mean(axis=0)
-        if result.ndim == 0:
+        if isscalar:
             return result.item()
         return result

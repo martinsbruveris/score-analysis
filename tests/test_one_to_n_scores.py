@@ -135,31 +135,42 @@ def test_fnir():
     assert np.array_equal(scores.fnir(threshold=2.5, rank=2), 0.5)
 
 
-# @pytest.mark.parametrize(
-#     "threshold_shape, rank_shape, expected_shape",
-#     [
-#         ((), (), ()),
-#         ((2,), (), (2,)),
-#         ((), (2,), (2,)),
-#         ((2,), (3,), (2, 3)),
-#     ],
-# )
-# def test_fnir_shapes(threshold_shape, rank_shape, expected_shape):
-#     """Test that fnir works with different shapes of thresholds and ranks."""
-#     rng = np.random.default_rng(42)
-#     matrix = rng.standard_normal((10, 20))
-#     scores = OneToNScores.from_matrix(
-#         matrix=matrix,
-#         probe_labels=range(10),
-#         gallery_labels=range(20),
-#         rank=None,
-#         score_class="neg",
-#         equal_class="neg",
-#     )
+# fmt: off
+@pytest.mark.parametrize(
+    "threshold_shape, rank_shape, expected_shape",
+    [
+        ((), (), ()),
+        ((1,), (), (1,)),
+        ((2, 1,), (), (2, 1,)),
+        ((), (1, 2), (1, 2)),
+        ((1,), (2,), (1, 2)),
+        ((2, 1), (1, 3), (2, 1, 1, 3)),
+        ((), None, ()),
+        (None, (), ()),
+        ((1,), None, (1,)),
+        (None, (1,), (1,)),
+        ((1, 2), None, (1, 2)),
+        (None, (1, 3), (1, 3)),
+    ],
+)
+# fmt: on
+def test_fnir_shapes(threshold_shape, rank_shape, expected_shape):
+    """Test that fnir works with different shapes of thresholds and ranks."""
+    rng = np.random.default_rng(42)
+    matrix = rng.standard_normal((5, 8))
+    scores = OneToNScores.from_matrix(
+        matrix=matrix,
+        probe_labels=range(5),
+        gallery_labels=range(8),
+        rank=None,
+        score_class="neg",
+        equal_class="neg",
+    )
 
+    threshold = rng.random(threshold_shape) if threshold_shape is not None else None
+    rank = rng.integers(1, 8, size=rank_shape) if rank_shape is not None else None
 
-#     threshold = rng.random(threshold_shape)
-#     rank = rng.integers(1, 20, size=rank_shape)
-
-#     result = scores.fnir(threshold=threshold, rank=rank)
-#     assert result.shape == expected_shape
+    result = scores.fnir(threshold=threshold, rank=rank)
+    assert np.shape(result) == expected_shape
+    if expected_shape == ():
+        assert np.isscalar(result)

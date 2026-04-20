@@ -21,8 +21,8 @@ def test_from_matrix(rank, score_class):
         expected = OneToNScores(
             pos=np.array([[7, 5, 1]])[:, slice_],
             neg=np.array([[3, 2, 1], [4, 2, 0]])[:, slice_],
-            pos_idx=np.array([[11, 12, 10]])[:, slice_],
-            neg_idx=np.array([[10, 11, 12], [12, 11, 10]])[:, slice_],
+            pos_idx=np.array([[1, 2, 0]])[:, slice_],
+            neg_idx=np.array([[0, 1, 2], [2, 1, 0]])[:, slice_],
             pos_labels=[10],
             neg_labels=[0, 1],
             gallery_labels=[10, 11, 12],
@@ -32,8 +32,8 @@ def test_from_matrix(rank, score_class):
         expected = OneToNScores(
             pos=np.array([[1, 5, 7]])[:, slice_],
             neg=np.array([[0, 2, 4], [1, 2, 3]])[:, slice_],
-            pos_idx=np.array([[10, 12, 11]])[:, slice_],
-            neg_idx=np.array([[10, 11, 12], [12, 11, 10]])[:, slice_],
+            pos_idx=np.array([[0, 2, 1]])[:, slice_],
+            neg_idx=np.array([[0, 1, 2], [2, 1, 0]])[:, slice_],
             pos_labels=[10],
             neg_labels=[1, 0],
             gallery_labels=[10, 11, 12],
@@ -110,3 +110,56 @@ def test_fpir():
 
     scores.equal_class = BinaryLabel.pos
     assert np.array_equal(scores.fpir(threshold=6), 0.5)  # We don't count it any more
+
+
+def test_fnir():
+    matrix = [
+        [0, 1, 2, 3, 4],
+        [0, 1, 2, 3, 5],
+        [0, 0, 2, 4, 6],
+        [0, 0, 0, 3, 7],
+    ]
+    scores = OneToNScores.from_matrix(
+        matrix=matrix,
+        probe_labels=[10, 12, 14, 16],
+        gallery_labels=[10, 12, 14, 16, 18],
+        rank=None,
+        score_class="neg",
+        equal_class="neg",
+    )
+
+    assert np.array_equal(scores.fnir(threshold=1.5), 0.5)
+    assert np.array_equal(scores.fnir(threshold=[2.5, 3.5]), [0.75, 1.0])
+    assert np.array_equal(scores.fnir(rank=2), 0.5)
+    assert np.array_equal(scores.fnir(rank=3), 0.75)
+    assert np.array_equal(scores.fnir(threshold=2.5, rank=2), 0.5)
+
+
+# @pytest.mark.parametrize(
+#     "threshold_shape, rank_shape, expected_shape",
+#     [
+#         ((), (), ()),
+#         ((2,), (), (2,)),
+#         ((), (2,), (2,)),
+#         ((2,), (3,), (2, 3)),
+#     ],
+# )
+# def test_fnir_shapes(threshold_shape, rank_shape, expected_shape):
+#     """Test that fnir works with different shapes of thresholds and ranks."""
+#     rng = np.random.default_rng(42)
+#     matrix = rng.standard_normal((10, 20))
+#     scores = OneToNScores.from_matrix(
+#         matrix=matrix,
+#         probe_labels=range(10),
+#         gallery_labels=range(20),
+#         rank=None,
+#         score_class="neg",
+#         equal_class="neg",
+#     )
+
+
+#     threshold = rng.random(threshold_shape)
+#     rank = rng.integers(1, 20, size=rank_shape)
+
+#     result = scores.fnir(threshold=threshold, rank=rank)
+#     assert result.shape == expected_shape

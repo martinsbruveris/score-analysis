@@ -212,7 +212,6 @@ class OneToNScores:
         if rank is not None:
             sort_idx = sort_idx[:, :rank]
         sorted_matrix = np.take_along_axis(matrix, sort_idx, axis=1)
-        sorted_gallery_labels = gallery_labels[sort_idx]
 
         # Split into mated (pos) and non-mated (neg) probes
         is_mated = np.isin(probe_labels, gallery_labels)
@@ -220,8 +219,8 @@ class OneToNScores:
         scores = OneToNScores(
             pos=sorted_matrix[is_mated],
             neg=sorted_matrix[~is_mated],
-            pos_idx=sorted_gallery_labels[is_mated],
-            neg_idx=sorted_gallery_labels[~is_mated],
+            pos_idx=sort_idx[is_mated],
+            neg_idx=sort_idx[~is_mated],
             pos_labels=probe_labels[is_mated],
             neg_labels=probe_labels[~is_mated],
             gallery_labels=gallery_labels,
@@ -289,17 +288,14 @@ class OneToNScores:
             torch_dtype=torch_dtype,
         )
 
-        # Map gallery indices to gallery labels
-        sorted_gallery = gallery_labels[indices]
-
         # Split into mated (pos) and non-mated (neg) probes
         is_mated = np.isin(probe_labels, gallery_labels)
 
         scores = OneToNScores(
             pos=distances[is_mated],
             neg=distances[~is_mated],
-            pos_idx=sorted_gallery[is_mated],
-            neg_idx=sorted_gallery[~is_mated],
+            pos_idx=indices[is_mated],
+            neg_idx=indices[~is_mated],
             pos_labels=probe_labels[is_mated],
             neg_labels=probe_labels[~is_mated],
             gallery_labels=gallery_labels,
@@ -320,4 +316,39 @@ class OneToNScores:
         )
         return scores.fpr(threshold)
 
-    def fnir(self, threshold: np.ndarray) -> np.ndarray: ...
+    def fnir(
+        self,
+        *,
+        threshold: np.ndarray | None = None,
+        rank: np.ndarray | None = None,
+    ) -> np.ndarray:
+        if threshold is None and rank is None:
+            raise ValueError("At least one of threshold or rank must be provided.")
+
+        Kp = self.pos.shape[0]
+
+        # For each mated probe, find the best-ranked mate in the stored results
+        gallery_at_idx = self.gallery_labels[self.pos_idx]  # (Kp, r)
+        mate_mask = gallery_at_idx == self.pos_labels[:, np.newaxis]  # (Kp, r)
+        mate_found = mate_mask.any(axis=1)  # (Kp,)
+        mate_pos = np.argmax(mate_mask, axis=1)  # (Kp,)
+        mate_score = self.pos[np.arange(Kp), mate_pos]  # (Kp,)
+
+        # A probe is identified only if its mate was found in the stored results
+        identified = mate_found.copy()  # (Kp,)
+
+        if rank is not None:
+            identified &= mate_pos < rank
+
+        if threshold is not None:
+            threshold = np.asarray(threshold, dtype=float)
+            passes = self.threshold_fn(
+                mate_score.reshape(-1, *([1] * threshold.ndim)),
+                threshold,
+            )
+            identified = identified.reshape(-1, *([1] * threshold.ndim)) & passes
+
+        result = np.asarray(identified, dtype=float).mean(axis=0)
+        if result.ndim == 0:
+            return result.item()
+        return result

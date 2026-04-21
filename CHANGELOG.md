@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.3.7 - Unpublished
+
+- Fix bug in batch size computation for `cross_embedding_distances`.
+
 ## v0.3.6 - 2026-04-21
 
 - Adding function `cross_embedding_distances` to compute distances between two sets

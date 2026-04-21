@@ -163,8 +163,11 @@ def embedding_distances(
         kwargs = {}
 
     pos_dists, neg_dists, pos_idx, neg_idx = compute_fn(
-        emb=emb,
-        labels=labels,
+        emb_a=emb,
+        emb_b=emb,
+        labels_a=labels,
+        labels_b=labels,
+        upper_triag_only=True,
         dist=dist,
         pos_limit=pos_limit,
         neg_limit=neg_limit,
@@ -191,10 +194,135 @@ def embedding_distances(
         return scores
 
 
+def cross_embedding_distances(
+    emb_a: np.ndarray,
+    emb_b: np.ndarray,
+    labels_a: np.ndarray,
+    labels_b: np.ndarray,
+    dist: str = "l2_squared",
+    pos_limit: int | float | None = None,
+    neg_limit: int | float | None = None,
+    batch_size: int | None = 1e8,
+    return_indices: bool = False,
+    use_torch: bool = False,
+    torch_dtype: "torch.dtype | str" = "float32",
+) -> Scores | tuple[Scores, np.ndarray, np.ndarray]:
+    """Compute pairwise distances between two set of embeddings, split into positive and
+    negative pairs based on labels.
+
+    For each pair of embeddings (i, j), compute the distance and classify it as positive
+    (same label) or negative (different label). The resulting distances are returned as
+    a ``Scores`` object.
+
+    When ``pos_limit`` or ``neg_limit`` are specified, the number of positive or
+    negative pairs is limited. If the limit is an integer >= 1, it specifies the maximum
+    number of pairs. If the limit is a float < 1, it specifies the fraction of pairs to
+    keep. The actual number of pairs before limiting is stored in ``scores.nb_all_pos``
+    and ``scores.nb_all_neg``.
+
+    Args:
+        emb_a: Array of shape ``(N, D)`` containing ``N`` embeddings of dim ``D``.
+        emb_b: Array of shape ``(M, D)`` containing ``M`` embeddings of dim ``D``.
+        labels_a: Array of shape ``(N,)`` containing the label for ``emb_a``.
+        labels_b: Array of shape ``(M,)`` containing the label for ``emb_b``.
+        dist: Distance metric to use. One of ``"l2_squared"``, ``"l2"`` or ``"cosine"``.
+        pos_limit: Maximum number (or fraction) of positive pairs to return.
+        neg_limit: Maximum number (or fraction) of negative pairs to return.
+        batch_size: Process embeddings in batches to limit memory usage. If ``None``,
+            all pairs are computed at once.
+        return_indices: If True, also return the embedding indices for each pair.
+            Only supported with ``use_torch=False``.
+        use_torch: Whether to use PyTorch for distance computation.
+        torch_dtype: Data type to use for PyTorch computations. We can use "bfloat16"
+            on supported GPUs for faster computation and reduced memory usage.
+
+    Returns:
+        A ``Scores`` object with positive and negative distance arrays. If
+        ``return_indices`` is True, returns a tuple ``(scores, pos_idx, neg_idx)``
+        where ``pos_idx`` and ``neg_idx`` are arrays of shape ``(K, 2)`` containing
+        the embedding indices for each pair, sorted by distance.
+    """
+    emb_a = np.asarray(emb_a)
+    emb_b = np.asarray(emb_b)
+    if np.issubdtype(emb_a.dtype, np.integer):
+        emb_a = emb_a.astype(np.float32)
+    if np.issubdtype(emb_b.dtype, np.integer):
+        emb_b = emb_b.astype(np.float32)
+    labels_a = np.asarray(labels_a)
+    labels_b = np.asarray(labels_b)
+    n = len(emb_a)
+    m = len(emb_b)
+
+    # Count total pos/neg pairs from labels alone (no distance computation needed)
+    unique_a, counts_a = np.unique(labels_a, return_counts=True)
+    unique_b, counts_b = np.unique(labels_b, return_counts=True)
+    _, idx_a, idx_b = np.intersect1d(unique_a, unique_b, return_indices=True)
+    nb_all_pos = np.dot(counts_a[idx_a], counts_b[idx_b])
+    nb_all_neg = n * m - nb_all_pos
+
+    # Convert fraction limits to absolute counts
+    if pos_limit is not None:
+        if isinstance(pos_limit, float) and pos_limit < 1:
+            pos_limit = int(nb_all_pos * pos_limit)
+        pos_limit = int(pos_limit)
+
+    if neg_limit is not None:
+        if isinstance(neg_limit, float) and neg_limit < 1:
+            neg_limit = int(nb_all_neg * neg_limit)
+        neg_limit = int(neg_limit)
+
+    # Determine batch size in terms of rows of the distance matrix
+    if batch_size is None:
+        row_batch_size = n
+    else:
+        row_batch_size = max(1, int(batch_size) // n)
+
+    if use_torch:
+        compute_fn = _embedding_distances_torch
+        kwargs = {"torch_dtype": _get_torch_dtype(torch_dtype)}
+    else:
+        compute_fn = _embedding_distances_numpy
+        kwargs = {}
+
+    pos_dists, neg_dists, pos_idx, neg_idx = compute_fn(
+        emb_a=emb_a,
+        emb_b=emb_b,
+        labels_a=labels_a,
+        labels_b=labels_b,
+        dist=dist,
+        upper_triag_only=False,
+        pos_limit=pos_limit,
+        neg_limit=neg_limit,
+        row_batch_size=row_batch_size,
+        return_indices=return_indices,
+        **kwargs,
+    )
+
+    nb_easy_pos = nb_all_pos - len(pos_dists)
+    nb_easy_neg = nb_all_neg - len(neg_dists)
+
+    scores = Scores(
+        pos_dists, neg_dists, nb_easy_pos=nb_easy_pos, nb_easy_neg=nb_easy_neg
+    )
+
+    if return_indices:
+        # Sort indices to match the sorted order of distances in Scores
+        pos_order = np.argsort(pos_dists)
+        pos_idx = pos_idx[pos_order]
+        neg_order = np.argsort(neg_dists)
+        neg_idx = neg_idx[neg_order]
+        return scores, pos_idx, neg_idx
+    else:
+        return scores
+
+
 def _embedding_distances_numpy(
-    emb: np.ndarray,
-    labels: np.ndarray,
+    emb_a: np.ndarray,
+    emb_b: np.ndarray,
+    labels_a: np.ndarray,
+    labels_b: np.ndarray,
     dist: str,
+    upper_triag_only: bool,
     pos_limit: int | None,
     neg_limit: int | None,
     row_batch_size: int,
@@ -209,24 +337,31 @@ def _embedding_distances_numpy(
         raise ValueError(f"Unknown distance: {dist}")
     dist_fn = dist_fn_dict[dist]
 
-    n = len(emb)
+    n = len(emb_a)
+    m = len(emb_b)
 
-    pos_dists = np.array([], dtype=emb.dtype)
-    neg_dists = np.array([], dtype=emb.dtype)
+    pos_dists = np.array([], dtype=emb_a.dtype)
+    neg_dists = np.array([], dtype=emb_a.dtype)
     pos_idx = np.empty((0, 2), dtype=np.intp)
     neg_idx = np.empty((0, 2), dtype=np.intp)
 
     for start in range(0, n, row_batch_size):
         end = min(start + row_batch_size, n)
-        batch_dists = dist_fn(emb[start:end], emb[start:])  # (end-start, N)
+        emb_col = emb_b[start:] if upper_triag_only else emb_b
+        batch_dists = dist_fn(emb_a[start:end], emb_col)  # (end-start, M)
 
-        # Mask for upper triangle: only pairs (i, j) with i < j
         row_indices = np.arange(start, end)[:, None]  # (B, 1)
-        col_indices = np.arange(start, n)[None, :]  # (1, N)
-        upper_mask = row_indices < col_indices  # (B, N)
+        if upper_triag_only:
+            # Mask for upper triangle: only pairs (i, j) with i < j
+            col_indices = np.arange(start, m)[None, :]  # (1, M)
+            upper_mask = row_indices < col_indices  # (B, M)
+        else:
+            col_indices = np.arange(0, m)[None, :]
+            upper_mask = True  # Default mask
 
         # Label match matrix for this batch
-        same_label = labels[start:end, None] == labels[None, start:]  # (B, N)
+        labels_col = labels_b[None, start:] if upper_triag_only else labels_b[None, :]
+        same_label = labels_a[start:end, None] == labels_col  # (B, M)
 
         pos_mask = upper_mask & same_label
         neg_mask = upper_mask & ~same_label
@@ -300,9 +435,12 @@ def _get_torch_dtype(dtype: "torch.dtype | str | None") -> "torch.dtype | None":
 
 
 def _embedding_distances_torch(
-    emb: np.ndarray,
-    labels: np.ndarray,
+    emb_a: np.ndarray,
+    emb_b: np.ndarray,
+    labels_a: np.ndarray,
+    labels_b: np.ndarray,
     dist: str,
+    upper_triag_only: bool,
     pos_limit: int | None,
     neg_limit: int | None,
     row_batch_size: int,
@@ -332,19 +470,26 @@ def _embedding_distances_torch(
         raise ValueError(f"Unknown distance: {dist}")
     dist_fn = dist_fn_dict[dist]
 
-    input_dtype = emb.dtype
+    input_dtype = emb_a.dtype
     torch_dtype = torch_dtype or torch.float32
     device = _get_torch_device()
 
-    emb = torch.as_tensor(emb, dtype=torch_dtype, device=device)
+    emb_a = torch.as_tensor(emb_a, dtype=torch_dtype, device=device)
+    emb_b = torch.as_tensor(emb_b, dtype=torch_dtype, device=device)
     if dist == "cosine":
-        emb_norm = torch.norm(emb, dim=-1, keepdim=True)
-        emb = emb / torch.clamp(emb_norm, min=1e-10)
+        emb_a_norm = torch.norm(emb_a, dim=-1, keepdim=True)
+        emb_b_norm = torch.norm(emb_b, dim=-1, keepdim=True)
+        emb_a = emb_a / torch.clamp(emb_a_norm, min=1e-10)
+        emb_b = emb_b / torch.clamp(emb_b_norm, min=1e-10)
     else:
         # Squared norm for l2 distances
-        emb_norm = (emb**2).sum(dim=-1, keepdim=True)  # (N, 1)
-    labels = torch.as_tensor(labels, device=device)
-    n = len(emb)
+        emb_a_norm = (emb_a**2).sum(dim=-1, keepdim=True)  # (N, 1)
+        emb_b_norm = (emb_b**2).sum(dim=-1, keepdim=True)  # (N, 1)
+    labels_a = torch.as_tensor(labels_a, device=device)
+    labels_b = torch.as_tensor(labels_b, device=device)
+
+    n = len(emb_a)
+    m = len(emb_b)
 
     pos_dists = torch.tensor([], dtype=torch_dtype, device=device)
     neg_dists = torch.tensor([], dtype=torch_dtype, device=device)
@@ -355,19 +500,27 @@ def _embedding_distances_torch(
         for start in range(0, n, row_batch_size):
             end = min(start + row_batch_size, n)
 
-            # Compute pairwise distances only against emb[start:] since columns before
-            # start are masked out by the upper triangle anyway.
+            # If we want to compute the upper triangle only, then compute pairwise
+            # distances only against emb[start:].
+            emb_col = emb_b[start:] if upper_triag_only else emb_b
+            emb_col_norm = emb_b_norm[start:] if upper_triag_only else emb_b_norm
+
             batch_dists = dist_fn(
-                emb[start:end], emb[start:], emb_norm[start:end], emb_norm[start:]
+                emb_a[start:end], emb_col, emb_a_norm[start:end], emb_col_norm
             )
 
-            # Mask for upper triangle: only pairs (i, j) with i < j
             row_indices = torch.arange(start, end, device=device).unsqueeze(1)
-            col_indices = torch.arange(start, n, device=device).unsqueeze(0)
-            upper_mask = row_indices < col_indices
+            if upper_triag_only:
+                # Mask for upper triangle: only pairs (i, j) with i < j
+                col_indices = torch.arange(start, m, device=device).unsqueeze(0)
+                upper_mask = row_indices < col_indices
+            else:
+                col_indices = torch.arange(0, m, device=device).unsqueeze(0)
+                upper_mask = True
 
             # Label match matrix for this batch
-            same_label = labels[start:end].unsqueeze(1) == labels[start:].unsqueeze(0)
+            labels_col = labels_b[start:] if upper_triag_only else labels_b
+            same_label = labels_a[start:end].unsqueeze(1) == labels_col.unsqueeze(0)
 
             pos_mask = upper_mask & same_label
             neg_mask = upper_mask & ~same_label

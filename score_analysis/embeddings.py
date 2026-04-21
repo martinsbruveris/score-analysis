@@ -275,7 +275,7 @@ def cross_embedding_distances(
     if batch_size is None:
         row_batch_size = n
     else:
-        row_batch_size = max(1, int(batch_size) // n)
+        row_batch_size = max(1, int(batch_size) // m)
 
     if use_torch:
         compute_fn = _embedding_distances_torch

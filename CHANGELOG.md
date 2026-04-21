@@ -1,5 +1,12 @@
 # Change Log
 
+## v0.3.6 - 2026-04-21
+
+- Adding function `cross_embedding_distances` to compute distances between two sets
+  of embeddings.
+- Fixed bug in `embedding_distances`, the `Scores.score_class` parameter was set
+  incorrectly (should have been `neg`, because smaller distances are better).
+
 ## v0.3.5 - 2026-03-30
 
 - Adding parameter `return_indices` to `embedding_distances` to return the indices that

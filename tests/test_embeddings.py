@@ -327,8 +327,6 @@ def test_cross_embedding_distances_indices(use_torch):
         use_torch=use_torch,
         return_indices=True,
     )
-    print(pos_idx)
-    print(neg_idx)
     assert np.array_equal(scores.pos, [3, 4, 5, 6, 7])
     assert np.array_equal(scores.neg, [2, 4, 8, 9])
     assert np.array_equal(pos_idx, [[1, 0], [0, 0], [1, 1], [0, 1], [2, 2]])

@@ -211,31 +211,45 @@ class OneToNScores:
         res = np.stack(res, axis=-1)
         return res
 
-    def threshold_at_fpir(self, fpir):
-        """Set threshold at FPIR"""
-        return self.to_binary_scores().threshold_at_fpr(fpr=fpir)
+    def threshold_at_fpir(self, fpir, *, method="linear"):
+        """Set threshold at FPIR
 
-    def threshold_at_tnir(self, tnir):
+        Args:
+            fpir: FPIR values at which to set threshold.
+            method: Possible values are "linear", "lower", "higher". If "lower"
+                or "higher", we return the closest score at which the metric is
+                lower or higher that the target. If "linear", we apply linear
+                interpolation between the lower and higher values.
+        """
+        return self.to_binary_scores().threshold_at_fpr(fpr=fpir, method=method)
+
+    def threshold_at_tnir(self, tnir, *, method="linear"):
         """Set threshold at TNIR"""
-        return self.to_binary_scores().threshold_at_tnr(tnr=tnir)
+        return self.to_binary_scores().threshold_at_tnr(tnr=tnir, method=method)
 
-    def threshold_at_fnir(self, fnir, rank):
+    def threshold_at_fnir(self, fnir, rank=None, *, method="linear"):
         """Set threshold at FNIR within a given rank."""
 
         if rank is None or np.isscalar(rank):
-            return self.to_binary_scores(rank).threshold_at_fnr(fnr=fnir)
+            return self.to_binary_scores(rank).threshold_at_fnr(fnr=fnir, method=method)
 
-        res = [self.to_binary_scores(rank=r).threshold_at_fnr(fnr=fnir) for r in rank]
+        res = [
+            self.to_binary_scores(rank=r).threshold_at_fnr(fnr=fnir, method=method)
+            for r in rank
+        ]
         res = np.stack(res, axis=-1)
         return res
 
-    def threshold_at_tpir(self, tpir, rank):
+    def threshold_at_tpir(self, tpir, rank=None, *, method="linear"):
         """Set threshold at TPIR within a given rank."""
 
         if rank is None or np.isscalar(rank):
-            return self.to_binary_scores(rank).threshold_at_tpr(tpr=tpir)
+            return self.to_binary_scores(rank).threshold_at_tpr(tpr=tpir, method=method)
 
-        res = [self.to_binary_scores(rank=r).threshold_at_tpr(tpr=tpir) for r in rank]
+        res = [
+            self.to_binary_scores(rank=r).threshold_at_tpr(tpr=tpir, method=method)
+            for r in rank
+        ]
         res = np.stack(res, axis=-1)
         return res
 

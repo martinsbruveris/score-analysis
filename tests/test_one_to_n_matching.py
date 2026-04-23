@@ -106,6 +106,35 @@ def test_metric_relationships(threshold, rank):
         np.testing.assert_allclose(fpir, 1.0 - tnir)
 
 
+def test_threshold_setting():
+    """Test that we can set the threshold and rank for all metrics."""
+    scores = OneToNScores(
+        neg_rank1=[1, 2, 3, 4, 5],
+        pos_rank1=[0, 0, 0, 0, 0],
+        pos_mate=[2, 4, 6, 8, 10],
+        pos_mate_rank=[2, 2, 2, 2, 4],
+        score_class="neg",
+        equal_class="pos",
+    )
+
+    # We rely on the correctness of threshold setting in Scores. Here we just
+    # check that the methods are available and return something of the right shape.
+    assert np.shape(scores.threshold_at_fpir(0.5)) == ()
+    assert np.shape(scores.threshold_at_fpir([0.5, 0.6])) == (2,)
+    assert np.shape(scores.threshold_at_tnir(0.5)) == ()
+    assert np.shape(scores.threshold_at_tnir([0.5, 0.6])) == (2,)
+
+    assert np.shape(scores.threshold_at_fnir(0.5, rank=None)) == ()
+    assert np.shape(scores.threshold_at_fnir([0.5, 0.6], rank=2)) == (2,)
+    assert np.shape(scores.threshold_at_fnir(0.5, rank=[2, 4])) == (2,)
+    assert np.shape(scores.threshold_at_fnir([0.5, 0.6], rank=[2, 4])) == (2, 2)
+
+    assert np.shape(scores.threshold_at_tpir(0.5, rank=None)) == ()
+    assert np.shape(scores.threshold_at_tpir([0.5, 0.6], rank=2)) == (2,)
+    assert np.shape(scores.threshold_at_tpir(0.5, rank=[2, 4])) == (2,)
+    assert np.shape(scores.threshold_at_tpir([0.5, 0.6], rank=[2, 4])) == (2, 2)
+
+
 @pytest.mark.parametrize(
     "threshold, rank, expected",
     [
@@ -233,6 +262,34 @@ def test_consolidate():
         score_class="neg",
         equal_class="pos",
     )
+
+    consolidated = scores.consolidate(kind="probe")
+    expected = OneToNScores(
+        neg_rank1=[1, 5],
+        pos_rank1=[2, 4, 6],
+        pos_mate=[4, 6, 10],
+        pos_mate_rank=[1, 3, 2],
+        pos_label_rank=[1, 2, 2],
+        neg_labels=[1, 2],
+        pos_labels=[1, 2, 3],
+        score_class="neg",
+        equal_class="pos",
+    )
+    assert consolidated == expected
+
+    consolidated = scores.consolidate(kind="gallery")
+    expected = OneToNScores(
+        neg_rank1=[1, 3, 5],
+        pos_rank1=[2, 4, 8, 6, 4],
+        pos_mate=[4, 6, 8, 10, 12],
+        pos_mate_rank=[1, 2, 3, 2, 1],
+        pos_label_rank=[1, 2, 3, 2, 1],
+        neg_labels=[1, 1, 2],
+        pos_labels=[1, 2, 2, 3, 3],
+        score_class="neg",
+        equal_class="pos",
+    )
+    assert consolidated == expected
 
     consolidated = scores.consolidate(kind="both")
     expected = OneToNScores(

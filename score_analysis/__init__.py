@@ -1,6 +1,10 @@
 from . import metrics, utils  # noqa: F401
 from .cm import ConfusionMatrix  # noqa: F401
-from .embeddings import cross_embedding_distances, embedding_distances  # noqa: F401
+from .embeddings import (  # noqa: F401
+    cross_embedding_distances,
+    embedding_distances,
+    probe_gallery_distances,
+)
 from .group_scores import GroupScores, groupwise  # noqa: F401
 from .roc_curve import ROCCurve, roc, roc_with_ci  # noqa: F401
 from .scores import (  # noqa: F401

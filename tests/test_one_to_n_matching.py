@@ -28,6 +28,9 @@ def test_equal():
     scores1.pos_label_rank = None
     assert scores1 == scores2
 
+    # Check the NotImplemented case
+    assert scores1 != 1.0
+
 
 @pytest.mark.parametrize(
     "score_class, equal_class, threshold, expected_fpir",
@@ -230,7 +233,7 @@ def test_false_match_rate_shapes():
 
 @pytest.mark.parametrize(
     "rank, expected_dir",
-    [(1, 0.4), ([1, 2], [0.4, 0.8]), ([2, 4], [0.8, 1.0])],
+    [(None, 1.0), (1, 0.4), ([1, 2], [0.4, 0.8]), ([2, 4], [0.8, 1.0])],
 )
 def test_dir(rank, expected_dir):
     for score_class in ["neg", "pos"]:

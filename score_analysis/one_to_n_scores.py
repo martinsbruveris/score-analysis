@@ -1,55 +1,7 @@
 """
-This is brainstorming and notes for later...
-
-First, I need to set the threshold. Assuming the threshold is set via FPIR, I need
-to know:
-  - For each probe x_i, which is the closest element from the gallery y_i.
-
-I want a data structure that allows me to compute FPIR(T), FNIR(T) efficiently for
-multiple values of T. Ideally this should be vectorised.
-
-I want both image level values, as well as aggregates by identity. This means I need to
-store all matches below a certain threshold.
-
-How do I know the threshold? I can use 1:1 matching to give me an idea, how the
-threshold relates to memory required to store all matches below that threshold. E.g.,
-with 100k probes and 1m gallery, I have 1e11 comparisons; setting the threshold at
-FMR of 1e-4, given 1e7 matches, which requires <100MB space.
-
-So, I have limits
-  - Threshold in [0, T_max]
-  - FPIR(T) in [0, FPIR(T_max)]
-  - FNIR(T) in [FNIR(T_max), 1] (note, decreasing in T)
-
-What data structure do I want?
-  - Given T, I want to know for each probe image, how many gallery samples have dist<T.
-  - To aggregate at identity level, I will also want the min by label. But this can
-    be accomplished by an aggregation step.
-  - The two options I have are:
-      - Sort by distance and leave unsorted by label
-
-What do I want to be able to measure?
-  - FPIR(T). Need: For each non-mated probe, distance to closest element in gallery.
-  - FNIR(T, r). Need: For each mated probe, distance to closest mated element in gallery
-    if withing rank r, Inf otherwise. Sufficient: For each mated probe, distance to
-    closest mated element in gallery and rank of closest mated element in gallery.
-  - MeanRank. Need: For each mated probe, rank of closest mated element in gallery.
-  - NonMatchRate(T). Proportion of mated probes that have no match (correct or not) at
-    threshold T. Need: For each mated probe, all rank 1 distances.
-  - FalseMatchRate(T, r). Proportion of mated probes that have a false match at
-    threshold T and within rank r. Note that:
-        FalseMatchRate(T, r) + NonMatchRate(T) = FNIR(T, r)
-
-This is a 1:1 metric masquerading a 1:N metric.
-  - MeanFalseMatches(T). Avegage number of false matches (mated or non-mated) at
-    threshold T. Need: For exact results, need all matches up to threshold T.
-
-These are the items I need
-  - neg_rank1_dist
-  - pos_rank1_dist
-  - mate_rank
-  - mate_dist
-  - id_rank
+Class to compute metrics for one-to-N matching (identification), such as FPIR, FNIR,
+DIR, etc. The class holds scores in a format that allows to compute all metrics
+efficiently.
 """
 
 from __future__ import annotations
@@ -147,6 +99,9 @@ class OneToNScores:
         Equality is tested exactly, rounding errors can lead to objects being not equal.
         """
 
+        if not isinstance(other, OneToNScores):
+            return NotImplemented
+
         def _opt_equal(a, b):
             if a is None and b is None:
                 return True
@@ -166,39 +121,69 @@ class OneToNScores:
             and self.equal_class == other.equal_class
         )
 
-    def fpir(self, threshold):
-        """False Positive Identification Rate
+    def fpir(self, threshold: np.ndarray) -> np.ndarray:
+        """False Positive Identification Rate.
 
         Fraction of non-mated probes for which we falsely identify a match in the
         gallery at the given threshold.
+
+        Args:
+            threshold: Threshold or array of thresholds at which to compute FPIR.
+
+        Returns:
+            FPIR value(s). Scalar if threshold is scalar, array otherwise.
         """
         return self.to_binary_scores().fpr(threshold)
 
-    def tnir(self, threshold):
-        """True Negative Identification Rate
+    def tnir(self, threshold: np.ndarray) -> np.ndarray:
+        """True Negative Identification Rate.
 
         Fraction of non-mated probes for which we correctly identify no matches in the
         gallery at the given threshold. Note that
             TNIR(T) = 1 - FPIR(T)
+
+        Args:
+            threshold: Threshold or array of thresholds at which to compute TNIR.
+
+        Returns:
+            TNIR value(s). Scalar if threshold is scalar, array otherwise.
         """
         return self.to_binary_scores().tnr(threshold)
 
-    def fnir(self, threshold: np.ndarray | None = None, rank: np.ndarray | None = None):
-        """False Negative Identification Rate
+    def fnir(
+        self, threshold: np.ndarray | None = None, rank: np.ndarray | None = None
+    ) -> np.ndarray:
+        """False Negative Identification Rate.
 
         Fraction of mated probes, for which we fail to identify their mate in the
         gallery at the given threshold and within the given rank.
 
-        One of threshold or rank can be None (but not both).
+        Args:
+            threshold: Threshold or array of thresholds. Can be None if rank is given.
+            rank: Maximum rank or array of ranks. Can be None if threshold is given.
+
+        Returns:
+            FNIR value(s). Scalar if both threshold and rank are scalar or None, array
+            otherwise.
         """
         return 1 - self.tpir(threshold, rank)
 
-    def tpir(self, threshold: np.ndarray | None = None, rank: np.ndarray | None = None):
-        """True Positive Identification Rate
+    def tpir(
+        self, threshold: np.ndarray | None = None, rank: np.ndarray | None = None
+    ) -> np.ndarray:
+        """True Positive Identification Rate.
 
         Fraction of mated probes for which we correctly identify their mate in the
         gallery at the given threshold and within the given rank. Note that
             TPIR(T, r) = 1 - FNIR(T, r)
+
+        Args:
+            threshold: Threshold or array of thresholds. Can be None if rank is given.
+            rank: Maximum rank or array of ranks. Can be None if threshold is given.
+
+        Returns:
+            TPIR value(s). Scalar if both threshold and rank are scalar or None, array
+            otherwise.
         """
         if threshold is None and rank is None:
             raise ValueError("threshold and rank cannot both be None.")
@@ -211,24 +196,53 @@ class OneToNScores:
         res = np.stack(res, axis=-1)
         return res
 
-    def threshold_at_fpir(self, fpir, *, method="linear"):
-        """Set threshold at FPIR
+    def threshold_at_fpir(self, fpir: np.ndarray, *, method="linear") -> np.ndarray:
+        """Set threshold at FPIR.
 
         Args:
             fpir: FPIR values at which to set threshold.
-            method: Possible values are "linear", "lower", "higher". If "lower"
-                or "higher", we return the closest score at which the metric is
-                lower or higher that the target. If "linear", we apply linear
-                interpolation between the lower and higher values.
+            method: Possible values are ``"linear"``, ``"lower"``, ``"higher"``. If
+                ``"lower"`` or ``"higher"``, we return the closest score at which the
+                metric is lower or higher than the target. If ``"linear"``, we apply
+                linear interpolation between the lower and higher values.
+
+        Returns:
+            Threshold value(s) at the given FPIR.
         """
         return self.to_binary_scores().threshold_at_fpr(fpr=fpir, method=method)
 
-    def threshold_at_tnir(self, tnir, *, method="linear"):
-        """Set threshold at TNIR"""
+    def threshold_at_tnir(self, tnir: np.ndarray, *, method="linear") -> np.ndarray:
+        """Set threshold at TNIR.
+
+        Args:
+            tnir: TNIR values at which to set threshold.
+            method: Possible values are ``"linear"``, ``"lower"``, ``"higher"``. If
+                ``"lower"`` or ``"higher"``, we return the closest score at which the
+                metric is lower or higher than the target. If ``"linear"``, we apply
+                linear interpolation between the lower and higher values.
+
+        Returns:
+            Threshold value(s) at the given TNIR.
+        """
         return self.to_binary_scores().threshold_at_tnr(tnr=tnir, method=method)
 
-    def threshold_at_fnir(self, fnir, rank=None, *, method="linear"):
-        """Set threshold at FNIR within a given rank."""
+    def threshold_at_fnir(
+        self, fnir: np.ndarray, rank: np.ndarray | None = None, *, method="linear"
+    ) -> np.ndarray:
+        """Set threshold at FNIR within a given rank.
+
+        Args:
+            fnir: FNIR values at which to set threshold.
+            rank: Maximum rank or array of ranks. If None, no rank constraint is
+                applied.
+            method: Possible values are ``"linear"``, ``"lower"``, ``"higher"``. If
+                ``"lower"`` or ``"higher"``, we return the closest score at which the
+                metric is lower or higher than the target. If ``"linear"``, we apply
+                linear interpolation between the lower and higher values.
+
+        Returns:
+            Threshold value(s) at the given FNIR and rank.
+        """
 
         if rank is None or np.isscalar(rank):
             return self.to_binary_scores(rank).threshold_at_fnr(fnr=fnir, method=method)
@@ -240,8 +254,23 @@ class OneToNScores:
         res = np.stack(res, axis=-1)
         return res
 
-    def threshold_at_tpir(self, tpir, rank=None, *, method="linear"):
-        """Set threshold at TPIR within a given rank."""
+    def threshold_at_tpir(
+        self, tpir: np.ndarray, rank: np.ndarray | None = None, *, method="linear"
+    ) -> np.ndarray:
+        """Set threshold at TPIR within a given rank.
+
+        Args:
+            tpir: TPIR values at which to set threshold.
+            rank: Maximum rank or array of ranks. If None, no rank constraint is
+                applied.
+            method: Possible values are ``"linear"``, ``"lower"``, ``"higher"``. If
+                ``"lower"`` or ``"higher"``, we return the closest score at which the
+                metric is lower or higher than the target. If ``"linear"``, we apply
+                linear interpolation between the lower and higher values.
+
+        Returns:
+            Threshold value(s) at the given TPIR and rank.
+        """
 
         if rank is None or np.isscalar(rank):
             return self.to_binary_scores(rank).threshold_at_tpr(tpr=tpir, method=method)
@@ -253,12 +282,24 @@ class OneToNScores:
         res = np.stack(res, axis=-1)
         return res
 
-    def mean_rank(self, threshold=None, rank=None):
+    def mean_rank(
+        self, threshold: np.ndarray | None = None, rank: np.ndarray | None = None
+    ) -> np.ndarray:
         """Mean Rank for Mated Probes.
 
         Mean rank of the best correct match in the gallery for mated probes, considering
         only matches below the given threshold and within the given rank. Either or
         both can be None.
+
+        Args:
+            threshold: Threshold or array of thresholds. If None, no threshold
+                constraint is applied.
+            rank: Maximum rank or array of ranks. If None, no rank constraint is
+                applied.
+
+        Returns:
+            Mean rank value(s). Scalar if both threshold and rank are scalar or None,
+            array otherwise.
         """
         scalar_result = (threshold is None or np.isscalar(threshold)) and (
             rank is None or np.isscalar(rank)
@@ -293,11 +334,18 @@ class OneToNScores:
             mean_rank = mean_rank.item()
         return mean_rank
 
-    def non_match_rate(self, threshold):
-        """Non-Match Rate for Mated Probes
+    def non_match_rate(self, threshold: np.ndarray | None) -> np.ndarray:
+        """Non-Match Rate for Mated Probes.
 
         Proportion of mated probes that have no match (correct or not) in the gallery
         at the given threshold.
+
+        Args:
+            threshold: Threshold or array of thresholds at which to compute the
+                non-match rate.
+
+        Returns:
+            Non-match rate value(s). Scalar if threshold is scalar, array otherwise.
         """
         if threshold is None:
             return 0.0  # No threshold, so all probes have a match
@@ -311,12 +359,20 @@ class OneToNScores:
         )
         return scores.fnr(threshold)
 
-    def false_match_rate(self, threshold, rank):
-        """False Match Rate for Mated Probes
+    def false_match_rate(self, threshold: np.ndarray, rank: np.ndarray | None = None):
+        """False Match Rate for Mated Probes.
 
         Proportion of mated probes that have a false match in the gallery at the given
         threshold and within the given rank, but no true match. Note the relationship
             FalseMatchRate(T, r) + NonMatchRate(T) = FNIR(T, r)
+
+        Args:
+            threshold: Threshold or array of thresholds.
+            rank: Maximum rank or array of ranks.
+
+        Returns:
+            False match rate value(s). Scalar if both threshold and rank are scalar,
+            array otherwise.
         """
         fnir = self.fnir(threshold, rank)
         nmr = self.non_match_rate(threshold)
@@ -326,12 +382,21 @@ class OneToNScores:
 
         return fnir - nmr
 
-    def dir(self, rank: np.ndarray):
-        """Detection and Identification Rate
+    def dir(self, rank: np.ndarray | None) -> np.ndarray:
+        """Detection and Identification Rate.
 
         Proportion of mated probes for which a mate is identified in the gallery within
         rank r.
+
+        Args:
+            rank: Maximum rank or array of ranks.
+
+        Returns:
+            DIR value(s). Scalar if rank is scalar, array otherwise.
         """
+        if rank is None:
+            return 1.0  # No rank constraint, so all probes are identified
+
         isscalar = np.isscalar(rank)
         rank = np.asarray([rank] if isscalar else rank)
         dir = (self.pos_mate_rank[:, None] <= rank[None, :]).mean(axis=0)
@@ -437,15 +502,22 @@ class OneToNScores:
             raise ValueError(f"Unknown value for {subset=}.")
 
     def to_binary_scores(self, rank: int | None = None) -> Scores:
-        """Converts 1:N matching into a binary classification problem, by taking the
-        best mated score for mated probes for positive class scores and the best score
-        for non-mated probes for negative class scores.
+        """Converts 1:N matching into a binary classification problem.
 
-        It measures the ability to identify mated matches against the cost of non-mated
-        matches, while ignoring the cost of missed or false matches for mated probes.
+        Takes the best mated score for mated probes as positive class scores and the
+        best score for non-mated probes as negative class scores. This measures the
+        ability to identify mated matches against the cost of non-mated matches, while
+        ignoring the cost of missed or false matches for mated probes.
 
         Mated probes whose best mate is not within the given rank are counted as false
         negatives (distance is set to Inf).
+
+        Args:
+            rank: Maximum rank. Mated probes whose best mate has a rank above this
+                value are treated as unmatched. If None, no rank constraint is applied.
+
+        Returns:
+            A ``Scores`` object for binary classification.
         """
         if rank is not None:
             # Filter by rank

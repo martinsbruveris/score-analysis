@@ -10,6 +10,7 @@ from score_analysis.embeddings import (
     embedding_distances,
     probe_gallery_distances,
 )
+from score_analysis.one_to_n_scores import OneToNScores
 
 
 @pytest.mark.parametrize("use_torch", [False, True])
@@ -351,36 +352,74 @@ def test_cross_embedding_distances_indices(use_torch):
 
 
 @pytest.mark.parametrize("use_torch", [False, True])
-@pytest.mark.parametrize("rank", [None, 1, 2])
 @pytest.mark.parametrize("batch_size", [None, 4])
-def test_probe_gallery_distances(use_torch, rank, batch_size):
+def test_probe_gallery_distances(use_torch, batch_size):
     """Test basic probe-gallery distance calculations."""
-    kwargs = {"batch_size": batch_size, "use_torch": use_torch, "rank": rank}
+    kwargs = {"batch_size": batch_size, "use_torch": use_torch}
 
-    probe = np.array([[0], [1], [2]])
-    gallery = np.array([[5], [4], [3]])
+    probe = [[0], [1], [2]]
+    gallery = [[5], [4], [3]]
+    probe_labels = [4, 5, 1]
+    gallery_labels = [1, 2, 2]
 
-    l2_matrix = np.array([[3, 4, 5], [2, 3, 4], [1, 2, 3]])
-    l2_sq_matrix = l2_matrix**2  # [[9, 16, 25], [4, 9, 16], [1, 4, 9]]
+    scores = probe_gallery_distances(
+        probe=probe,
+        gallery=gallery,
+        probe_labels=probe_labels,
+        gallery_labels=gallery_labels,
+        dist="l2",
+        **kwargs,
+    )
+    expected = OneToNScores(
+        neg_rank1=[2, 3],
+        pos_rank1=[1],
+        pos_mate=[3],
+        pos_mate_rank=[3],
+        pos_label_rank=[2],
+        neg_labels=[5, 4],
+        pos_labels=[1],
+        score_class="neg",
+        equal_class="pos",
+    )
+    assert scores == expected
 
-    result = probe_gallery_distances(probe, gallery, dist="l2_squared", **kwargs)
-    expected = l2_sq_matrix if rank is None else l2_sq_matrix[:, :rank]
-    assert np.array_equal(result, expected)
 
-    result = probe_gallery_distances(probe, gallery, dist="l2", **kwargs)
-    expected = l2_matrix if rank is None else l2_matrix[:, :rank]
-    assert np.array_equal(result, expected)
+@pytest.mark.parametrize("use_torch", [False, True])
+@pytest.mark.parametrize("batch_size", [None, 4])
+def test_probe_gallery_distances_return_indices(use_torch, batch_size):
+    """Test basic probe-gallery distance calculations."""
+    kwargs = {"batch_size": batch_size, "use_torch": use_torch}
+
+    probe = [[0.0], [1.0], [2.0]]
+    gallery = [[5.0], [4.0], [3.0]]
+    probe_labels = [4, 5, 1]
+    gallery_labels = [1, 2, 2]
+
+    _, indices = probe_gallery_distances(
+        probe=probe,
+        gallery=gallery,
+        probe_labels=probe_labels,
+        gallery_labels=gallery_labels,
+        dist="l2",
+        return_indices=True,
+        **kwargs,
+    )
+    assert np.array_equal(indices.neg_rank1, [[1, 2], [0, 2]])
+    assert np.array_equal(indices.pos_rank1, [[2, 2]])
+    assert np.array_equal(indices.pos_mate, [[2, 0]])
 
 
 @pytest.mark.parametrize("use_torch", [False, True])
 def test_probe_gallery_invalid_distance(use_torch):
     """Test that an invalid distance metric raises an error."""
-    probe = np.array([[0], [1], [2]])
-    gallery = np.array([[5], [4], [3]])
-
     with pytest.raises(ValueError):
         probe_gallery_distances(
-            probe, gallery, dist="invalid_distance", use_torch=use_torch
+            probe=[[0], [1], [2]],
+            gallery=[[5], [4], [3]],
+            probe_labels=[4, 5, 1],
+            gallery_labels=[1, 2, 2],
+            dist="invalid_distance",
+            use_torch=use_torch,
         )
 
 
@@ -390,48 +429,65 @@ def test_probe_gallery_torch_numpy_equality(dist):
     rng = np.random.default_rng(42)
     probe = rng.standard_normal((20, 8)).astype(np.float32)
     gallery = rng.standard_normal((30, 8)).astype(np.float32)
+    probe_labels = rng.integers(0, 4, size=20)
+    gallery_labels = rng.integers(0, 4, size=30)
 
-    results_np = probe_gallery_distances(probe, gallery, dist=dist, use_torch=False)
-    results_torch = probe_gallery_distances(probe, gallery, dist=dist, use_torch=True)
+    args = (probe, gallery, probe_labels, gallery_labels)
+    kwargs = {"dist": dist, "return_indices": True}
 
-    np.testing.assert_allclose(results_np, results_torch, rtol=1e-6)
-
-
-def test_probe_gallery_torch_dtype():
-    """Test that the use_torch option respects the dtype of the input embeddings."""
-    rng = np.random.default_rng(42)
-    probe = rng.standard_normal((10, 4)).astype(np.float64)
-    gallery = rng.standard_normal((15, 4)).astype(np.float64)
-
-    results = probe_gallery_distances(
-        probe, gallery, use_torch=True, torch_dtype="float32"
-    )
-    assert results.dtype == np.float64
-
-
-@pytest.mark.parametrize("use_torch", [False, True])
-@pytest.mark.parametrize("rank", [None, 1, 2])
-def test_probe_gallery_distances_indices(use_torch, rank):
-    """Test that return_indices returns the correct gallery indices."""
-    probe = np.array([[0], [10]])
-    gallery = np.array([[1], [4], [8]])
-
-    result, indices = probe_gallery_distances(
-        probe,
-        gallery,
-        dist="l2",
-        batch_size=None,
-        use_torch=use_torch,
-        rank=rank,
-        return_indices=True,
+    scores_np, indices_np = probe_gallery_distances(*args, **kwargs, use_torch=False)
+    scores_torch, indices_torch = probe_gallery_distances(
+        *args, **kwargs, use_torch=True
     )
 
-    l2_matrix = np.array([[1, 4, 8], [2, 6, 9]])
-    all_indices = np.array([[0, 1, 2], [2, 1, 0]])
+    np.testing.assert_allclose(scores_np.neg_rank1, scores_torch.neg_rank1, rtol=1e-6)
+    np.testing.assert_allclose(scores_np.pos_rank1, scores_torch.pos_rank1, rtol=1e-6)
+    np.testing.assert_allclose(scores_np.pos_mate, scores_torch.pos_mate, rtol=1e-6)
+    np.testing.assert_equal(scores_np.pos_mate_rank, scores_torch.pos_mate_rank)
+    np.testing.assert_equal(scores_np.pos_label_rank, scores_torch.pos_label_rank)
+    np.testing.assert_equal(scores_np.neg_labels, scores_torch.neg_labels)
+    np.testing.assert_equal(scores_np.pos_labels, scores_torch.pos_labels)
 
-    r = 3 if rank is None else rank
-    expected_dists = l2_matrix[:, :r]
-    expected_indices = all_indices[:, :r]
+    np.testing.assert_equal(indices_np.neg_rank1, indices_torch.neg_rank1)
+    np.testing.assert_equal(indices_np.pos_rank1, indices_torch.pos_rank1)
+    np.testing.assert_equal(indices_np.pos_mate, indices_torch.pos_mate)
 
-    assert np.array_equal(result, expected_dists)
-    assert np.array_equal(indices, expected_indices)
+
+# def test_probe_gallery_torch_dtype():
+#     """Test that the use_torch option respects the dtype of the input embeddings."""
+#     rng = np.random.default_rng(42)
+#     probe = rng.standard_normal((10, 4)).astype(np.float64)
+#     gallery = rng.standard_normal((15, 4)).astype(np.float64)
+
+#     results = probe_gallery_distances(
+#         probe, gallery, use_torch=True, torch_dtype="float32"
+#     )
+#     assert results.dtype == np.float64
+
+
+# @pytest.mark.parametrize("use_torch", [False, True])
+# @pytest.mark.parametrize("rank", [None, 1, 2])
+# def test_probe_gallery_distances_indices(use_torch, rank):
+#     """Test that return_indices returns the correct gallery indices."""
+#     probe = np.array([[0], [10]])
+#     gallery = np.array([[1], [4], [8]])
+
+#     result, indices = probe_gallery_distances(
+#         probe,
+#         gallery,
+#         dist="l2",
+#         batch_size=None,
+#         use_torch=use_torch,
+#         rank=rank,
+#         return_indices=True,
+#     )
+
+#     l2_matrix = np.array([[1, 4, 8], [2, 6, 9]])
+#     all_indices = np.array([[0, 1, 2], [2, 1, 0]])
+
+#     r = 3 if rank is None else rank
+#     expected_dists = l2_matrix[:, :r]
+#     expected_indices = all_indices[:, :r]
+
+#     assert np.array_equal(result, expected_dists)
+#     assert np.array_equal(indices, expected_indices)

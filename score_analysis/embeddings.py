@@ -3,10 +3,12 @@ Functions to compute distances and similarities between embeddings.
 """
 
 import warnings
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
 
+from .one_to_n_scores import OneToNScores
 from .scores import Scores
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -582,205 +584,275 @@ def _embedding_distances_torch(
     return pos_dists, neg_dists, pos_idx, neg_idx
 
 
+@dataclass
+class ProbeGalleryIndices:
+    neg_rank1: np.ndarray
+    pos_rank1: np.ndarray
+    pos_mate: np.ndarray
+
+
 def probe_gallery_distances(
-    probes: np.ndarray,
+    probe: np.ndarray,
     gallery: np.ndarray,
+    probe_labels: np.ndarray,
+    gallery_labels: np.ndarray,
     dist: str = "l2_squared",
-    rank: int | None = None,
-    batch_size: int | None = 1e8,
     return_indices: bool = False,
+    batch_size: int | None = 1e8,
     use_torch: bool = False,
     torch_dtype: "torch.dtype | str" = "float32",
-) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
-    """Compute distances from probe embeddings to the closest gallery embeddings.
+) -> OneToNScores | tuple[OneToNScores, ProbeGalleryIndices]:
+    """Compute distances from probe embeddings to gallery embeddings and return
+    one-to-N matching scores.
 
-    For each probe, computes distances to all gallery embeddings and returns the
-    ``rank`` smallest distances, sorted in ascending order.
+    For each probe, computes distances to all gallery embeddings and extracts:
+
+    - For non-mated probes (probe label not in gallery): the distance to the
+      closest gallery embedding.
+    - For mated probes (probe label in gallery): the distance to the closest
+      gallery embedding (rank-1), the distance to the closest same-label
+      gallery embedding, the rank of that mated embedding, and the label rank
+      (number of unique labels with smaller distances).
 
     Args:
-        probes: Array of shape ``(P, D)`` containing probe embeddings.
+        probe: Array of shape ``(P, D)`` containing probe embeddings.
         gallery: Array of shape ``(G, D)`` containing gallery embeddings.
+        probe_labels: Array of shape ``(P,)`` containing the label for each
+            probe embedding.
+        gallery_labels: Array of shape ``(G,)`` containing the label for each
+            gallery embedding.
         dist: Distance metric. One of ``"l2_squared"``, ``"l2"`` or ``"cosine"``.
-        rank: Number of closest gallery items to return per probe. If ``None``,
-            returns distances to all gallery items (sorted).
+        return_indices: If True, also return the probe and gallery indices for
+            the closest matches.
         batch_size: Maximum number of distances to keep in memory at once.
             Controls the probe batch size as ``batch_size // G``. If ``None``,
             all distances are computed at once.
-        return_indices: If True, also return the gallery indices for the closest
-            items.
         use_torch: Whether to use PyTorch for distance computation.
         torch_dtype: Data type for PyTorch computations. We can use "bfloat16"
             on supported GPUs for faster computation and reduced memory usage.
 
     Returns:
-        Array of shape ``(P, rank)`` with sorted distances per probe. If
-        ``return_indices`` is True, returns a tuple ``(distances, indices)``
-        where ``indices`` has shape ``(P, rank)`` containing gallery indices.
+        A ``OneToNScores`` object with the matching scores. Optionally returns a
+        ``ProbeGalleryIndices`` object with the corresponding indices of the closest
+        matches in the gallery. The indices are aligned to the order of the probes
+        in the returned ``OneToNScores`` object (which is different from the original
+        order of the probes).
     """
-    probes = np.asarray(probes)
-    if np.issubdtype(probes.dtype, np.integer):
-        probes = probes.astype(np.float32)
+    probe = np.asarray(probe)
+    if np.issubdtype(probe.dtype, np.integer):
+        probe = probe.astype(np.float32)
     gallery = np.asarray(gallery)
     if np.issubdtype(gallery.dtype, np.integer):
         gallery = gallery.astype(np.float32)
+    probe_labels = np.asarray(probe_labels)
+    gallery_labels = np.asarray(gallery_labels)
 
-    p = len(probes)
+    p = len(probe)
     g = len(gallery)
-
-    if rank is None:
-        rank = g
-    rank = min(rank, g)
 
     if batch_size is None:
         row_batch_size = p
     else:
         row_batch_size = max(1, int(batch_size) // g)
 
-    if use_torch:
-        compute_fn = _probe_gallery_distances_torch
-        kwargs = {"torch_dtype": _get_torch_dtype(torch_dtype)}
-    else:
-        compute_fn = _probe_gallery_distances_numpy
-        kwargs = {}
-
-    matrix, indices = compute_fn(
-        probes=probes,
-        gallery=gallery,
-        dist=dist,
-        rank=rank,
-        row_batch_size=row_batch_size,
-        return_indices=return_indices,
-        **kwargs,
-    )
-    return (matrix, indices) if return_indices else matrix
-
-
-def _probe_gallery_distances_numpy(
-    probes: np.ndarray,
-    gallery: np.ndarray,
-    dist: str,
-    rank: int,
-    row_batch_size: int,
-    return_indices: bool,
-) -> tuple[np.ndarray, np.ndarray | None]:
-    dist_fn_dict = {
-        "l2_squared": l2_squared_matrix,
-        "l2": l2_matrix,
-        "cosine": cosine_matrix,
-    }
-    if dist not in dist_fn_dict:
-        raise ValueError(f"Unknown distance: {dist}")
-    dist_fn = dist_fn_dict[dist]
-
-    p = len(probes)
+    p = len(probe)
     g = len(gallery)
-    result = np.empty((p, rank), dtype=probes.dtype)
+
+    is_mated = np.isin(probe_labels, gallery_labels)
+
+    # Sort gallery by label so we can use reduceat for per-label min distances
+    gallery_sort = np.argsort(gallery_labels)
+    gallery = gallery[gallery_sort]
+    gallery_labels = gallery_labels[gallery_sort]
+    unique_labels, label_starts = np.unique(gallery_labels, return_index=True)
+    label_ends = np.append(label_starts[1:], len(gallery_labels))
+
+    # Pre-allocate output arrays
+    nb_neg = int(np.sum(~is_mated))
+    nb_pos = int(np.sum(is_mated))
+
+    neg_rank1 = np.empty(nb_neg, dtype=probe.dtype)
+    pos_rank1 = np.empty(nb_pos, dtype=probe.dtype)
+    pos_mate = np.empty(nb_pos, dtype=probe.dtype)
+    pos_mate_rank = np.empty(nb_pos, dtype=np.intp)
+    pos_label_rank = np.empty(nb_pos, dtype=np.intp)
+    neg_labels = np.empty(nb_neg, dtype=probe_labels.dtype)
+    pos_labels = np.empty(nb_pos, dtype=probe_labels.dtype)
+
     if return_indices:
-        result_idx = np.empty((p, rank), dtype=np.intp)
-    else:
-        result_idx = None
+        neg_rank1_idx = np.empty((nb_neg, 2), dtype=np.intp)
+        pos_rank1_idx = np.empty((nb_pos, 2), dtype=np.intp)
+        pos_mate_idx = np.empty((nb_pos, 2), dtype=np.intp)
+
+    neg_offset = 0  # Next index to write in neg_rank1/neg_labels
+    pos_offset = 0  # Same for pos_... arrays
 
     for start in range(0, p, row_batch_size):
         end = min(start + row_batch_size, p)
-        batch_dists = dist_fn(probes[start:end], gallery)  # (batch, G)
+        batch_dists = _dist_matrix(
+            probe[start:end],
+            gallery,
+            dist=dist,
+            use_torch=use_torch,
+            torch_dtype=torch_dtype,
+        )  # (batch, G)
+        batch_mated = is_mated[start:end]
+        batch_labels = probe_labels[start:end]
 
-        if rank < g:
-            # Use argpartition for O(G) selection of top-rank elements
-            top_idx = np.argpartition(batch_dists, rank, axis=1)[:, :rank]
-            top_dists = np.take_along_axis(batch_dists, top_idx, axis=1)
-        else:
-            top_idx = np.broadcast_to(np.arange(g), batch_dists.shape).copy()
-            top_dists = batch_dists
+        # Non-mated probes: closest gallery distance
+        neg_mask = ~batch_mated
+        nb_neg_batch = int(neg_mask.sum())
+        if nb_neg_batch > 0:
+            sl = slice(neg_offset, neg_offset + nb_neg_batch)
+            neg_dists = batch_dists[neg_mask]
+            neg_rank1[sl] = neg_dists.min(axis=1)
+            neg_labels[sl] = batch_labels[neg_mask]
+            if return_indices:
+                neg_rank1_idx[sl, 0] = start + np.where(neg_mask)[0]
+                neg_rank1_idx[sl, 1] = gallery_sort[neg_dists.argmin(axis=1)]
+            neg_offset += nb_neg_batch
 
-        # Sort the selected elements
-        sort_order = np.argsort(top_dists, axis=1)
-        result[start:end] = np.take_along_axis(top_dists, sort_order, axis=1)
-        if return_indices:
-            result_idx[start:end] = np.take_along_axis(top_idx, sort_order, axis=1)
+        # Mated probes
+        nb_pos_batch = int(batch_mated.sum())
+        if nb_pos_batch > 0:
+            mated_dists = batch_dists[batch_mated]  # (Pm, G)
+            mated_probe_labels = batch_labels[batch_mated]  # (Pm,)
+            sl = slice(pos_offset, pos_offset + nb_pos_batch)
 
-    return result, result_idx
+            # Rank-1: closest gallery item overall
+            pos_rank1[sl] = mated_dists.min(axis=1)
+            pos_labels[sl] = mated_probe_labels
 
+            # Per-label min distances via reduceat (gallery is label-sorted)
+            min_per_label = np.minimum.reduceat(
+                mated_dists, label_starts, axis=1
+            )  # (Pm, n_unique_labels)
 
-def _probe_gallery_distances_torch(
-    probes: np.ndarray,
-    gallery: np.ndarray,
-    dist: str,
-    rank: int,
-    row_batch_size: int,
-    return_indices: bool,
-    torch_dtype: "torch.dtype",
-) -> tuple[np.ndarray, np.ndarray | None]:
-    import torch
+            # Mate distance: look up each probe's own label in min_per_label
+            label_idx = np.searchsorted(unique_labels, mated_probe_labels)
+            batch_mate = min_per_label[np.arange(nb_pos_batch), label_idx]
+            pos_mate[sl] = batch_mate
 
-    def _l2_squared_matrix(x, y, x_n, y_n):
-        return x_n + y_n.mT - 2.0 * x @ y.mT
+            # Mate rank: number of gallery items with distance < mate_dist, + 1
+            pos_mate_rank[sl] = np.sum(mated_dists < batch_mate[:, None], axis=1) + 1
 
-    def _l2_matrix(x, y, x_n, y_n):
-        return torch.cdist(x, y, p=2)
+            # Label rank: number of unique labels with min distance < mate_dist, + 1
+            pos_label_rank[sl] = np.sum(min_per_label < batch_mate[:, None], axis=1) + 1
 
-    def _cosine_matrix(x, y, x_n, y_n):
-        return -x @ y.mT  # We add 1 at the post-processing stage
+            if return_indices:
+                mated_probe_idx = start + np.where(batch_mated)[0]
+                pos_rank1_idx[sl, 0] = mated_probe_idx
+                pos_rank1_idx[sl, 1] = gallery_sort[mated_dists.argmin(axis=1)]
 
-    dist_fn_dict = {
-        "l2_squared": _l2_squared_matrix,
-        "l2": _l2_matrix,
-        "cosine": _cosine_matrix,
-    }
-    if dist not in dist_fn_dict:
-        raise ValueError(f"Unknown distance: {dist}")
-    dist_fn = dist_fn_dict[dist]
+                # Mate gallery index: argmin within each probe's label group
+                group_start = label_starts[label_idx]  # (Pm,)
+                group_end = label_ends[label_idx]  # (Pm,)
+                # We allocate a matrix that works for the largest group
+                max_group_size = int((group_end - group_start).max())
+                col_idx = group_start[:, None] + np.arange(max_group_size)
+                # And mask out the invalid columns that go beyond a given group's end
+                valid = col_idx < group_end[:, None]
+                # Clip col_idx to avoid out-of-bounds indexing
+                col_idx = np.clip(col_idx, 0, g - 1)
+                group_dists = mated_dists[np.arange(nb_pos_batch)[:, None], col_idx]
+                group_dists = np.where(valid, group_dists, np.inf)
+                mate_argmin = group_start + np.argmin(group_dists, axis=1)
+                pos_mate_idx[sl, 0] = mated_probe_idx
+                pos_mate_idx[sl, 1] = gallery_sort[mate_argmin]
 
-    input_dtype = probes.dtype
-    device = _get_torch_device()
+            pos_offset += nb_pos_batch
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", message="The given NumPy array is not writable"
+    scores = OneToNScores(
+        neg_rank1=neg_rank1,
+        pos_rank1=pos_rank1,
+        pos_mate=pos_mate,
+        pos_mate_rank=pos_mate_rank,
+        pos_label_rank=pos_label_rank,
+        neg_labels=neg_labels,
+        pos_labels=pos_labels,
+        score_class="neg",
+        equal_class="pos",
+    )
+
+    if return_indices:
+        # OneToNScores sorts neg by neg_rank1 and pos by pos_mate; apply the
+        # same permutations to the index arrays.
+        neg_order = np.argsort(neg_rank1)
+        pos_order = np.argsort(pos_mate)
+        indices = ProbeGalleryIndices(
+            neg_rank1=neg_rank1_idx[neg_order],
+            pos_rank1=pos_rank1_idx[pos_order],
+            pos_mate=pos_mate_idx[pos_order],
         )
-        probes = torch.as_tensor(probes, dtype=torch_dtype, device=device)
-        gallery = torch.as_tensor(gallery, dtype=torch_dtype, device=device)
-
-    if dist == "cosine":
-        probe_norm = torch.norm(probes, dim=-1, keepdim=True)
-        probes = probes / torch.clamp(probe_norm, min=1e-10)
-        gallery_norm = torch.norm(gallery, dim=-1, keepdim=True)
-        gallery = gallery / torch.clamp(gallery_norm, min=1e-10)
-
-    # Squared norms for l2_squared; harmless for other metrics
-    probe_norms = (probes**2).sum(dim=-1, keepdim=True)
-    gallery_norms = (gallery**2).sum(dim=-1, keepdim=True)
-
-    p = len(probes)
-    g = len(gallery)
-    result = torch.empty((p, rank), dtype=torch_dtype, device=device)
-    if return_indices:
-        result_idx = torch.empty((p, rank), dtype=torch.long, device=device)
     else:
-        result_idx = None
+        indices = None
 
-    with torch.inference_mode():
-        for start in range(0, p, row_batch_size):
-            end = min(start + row_batch_size, p)
-            batch_dists = dist_fn(
-                probes[start:end], gallery, probe_norms[start:end], gallery_norms
-            )
-
-            if rank < g:
-                topk = torch.topk(batch_dists, rank, dim=1, largest=False, sorted=True)
-                result[start:end] = topk.values
-                if return_indices:
-                    result_idx[start:end] = topk.indices
-            else:
-                sorted_result = torch.sort(batch_dists, dim=1)
-                result[start:end] = sorted_result.values
-                if return_indices:
-                    result_idx[start:end] = sorted_result.indices
-
-    result = result.cpu().float().numpy().astype(input_dtype)
     if return_indices:
-        result_idx = result_idx.cpu().numpy().astype(np.intp)
+        return scores, indices
+    return scores
 
-    if dist == "cosine":
-        result += 1
 
-    return result, result_idx
+def _dist_matrix(
+    x: np.ndarray,
+    y: np.ndarray,
+    dist: str,
+    use_torch: bool,
+    torch_dtype: "torch.dtype | str",
+):
+    if not use_torch:
+        dist_fn_dict = {
+            "l2_squared": l2_squared_matrix,
+            "l2": l2_matrix,
+            "cosine": cosine_matrix,
+        }
+        if dist not in dist_fn_dict:
+            raise ValueError(f"Unknown distance: {dist}")
+        dist_fn = dist_fn_dict[dist]
+        return dist_fn(x, y)
+
+    else:
+        import torch
+
+        def _l2_squared_matrix(x, y, x_n, y_n):
+            d = x_n + y_n.mT - 2.0 * x @ y.mT  # (N, M)
+            return d
+
+        def _l2_matrix(x, y, x_n, y_n):
+            return torch.cdist(x, y, p=2)
+
+        def _cosine_matrix(x, y, x_n, y_n):
+            # Note that for normalized vectors, after the post-processing step, we have
+            #     _l2_squared(x, y) = 2 * _cosine(x, y)
+            return 1 - x @ y.mT
+
+        dist_fn_dict = {
+            "l2_squared": _l2_squared_matrix,
+            "l2": _l2_matrix,
+            "cosine": _cosine_matrix,
+        }
+        if dist not in dist_fn_dict:
+            raise ValueError(f"Unknown distance: {dist}")
+        dist_fn = dist_fn_dict[dist]
+
+        input_dtype = x.dtype
+        torch_dtype = _get_torch_dtype(torch_dtype)
+        device = _get_torch_device()
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="The given NumPy array is not writable"
+            )
+            x = torch.as_tensor(x, dtype=torch_dtype, device=device)
+            y = torch.as_tensor(y, dtype=torch_dtype, device=device)
+        if dist == "cosine":
+            x_norm = torch.norm(x, dim=-1, keepdim=True)
+            y_norm = torch.norm(y, dim=-1, keepdim=True)
+            x = x / torch.clamp(x_norm, min=1e-10)
+            y = y / torch.clamp(y_norm, min=1e-10)
+        else:
+            # Squared norm for l2 distances
+            x_norm = (x**2).sum(dim=-1, keepdim=True)  # (N, 1)
+            y_norm = (y**2).sum(dim=-1, keepdim=True)  # (N, 1)
+
+        res = dist_fn(x, y, x_norm, y_norm)
+        return res.cpu().float().numpy().astype(input_dtype)

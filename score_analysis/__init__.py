@@ -17,4 +17,4 @@ from .scores import (  # noqa: F401
 )
 from .showbias import BiasFrame, showbias  # noqa: F401
 
-__version__ = "0.3.6"
+__version__ = "0.3.7"

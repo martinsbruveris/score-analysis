@@ -1,8 +1,9 @@
 # Change Log
 
-## v0.3.7 - Unpublished
+## v0.3.7 - 2026-04-24
 
 - Fix bug in batch size computation for `cross_embedding_distances`.
+- Reworked `probe_gallery_distances` function to return `OneToNScores` object.
 
 ## v0.3.6 - 2026-04-21
 

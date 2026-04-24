@@ -6,6 +6,7 @@ from .embeddings import (  # noqa: F401
     probe_gallery_distances,
 )
 from .group_scores import GroupScores, groupwise  # noqa: F401
+from .one_to_n_scores import OneToNScores  # noqa: F401
 from .roc_curve import ROCCurve, roc, roc_with_ci  # noqa: F401
 from .scores import (  # noqa: F401
     DEFAULT_BOOTSTRAP_CONFIG,

@@ -390,8 +390,8 @@ def test_probe_gallery_distances_return_indices(use_torch, batch_size):
     """Test basic probe-gallery distance calculations."""
     kwargs = {"batch_size": batch_size, "use_torch": use_torch}
 
-    probe = [[0], [1], [2]]
-    gallery = [[5], [4], [3]]
+    probe = [[0.0], [1.0], [2.0]]
+    gallery = [[5.0], [4.0], [3.0]]
     probe_labels = [4, 5, 1]
     gallery_labels = [1, 2, 2]
 
@@ -409,29 +409,48 @@ def test_probe_gallery_distances_return_indices(use_torch, batch_size):
     assert np.array_equal(indices.pos_mate, [[2, 0]])
 
 
-# @pytest.mark.parametrize("use_torch", [False, True])
-# def test_probe_gallery_invalid_distance(use_torch):
-#     """Test that an invalid distance metric raises an error."""
-#     probe = np.array([[0], [1], [2]])
-#     gallery = np.array([[5], [4], [3]])
+@pytest.mark.parametrize("use_torch", [False, True])
+def test_probe_gallery_invalid_distance(use_torch):
+    """Test that an invalid distance metric raises an error."""
+    with pytest.raises(ValueError):
+        probe_gallery_distances(
+            probe=[[0], [1], [2]],
+            gallery=[[5], [4], [3]],
+            probe_labels=[4, 5, 1],
+            gallery_labels=[1, 2, 2],
+            dist="invalid_distance",
+            use_torch=use_torch,
+        )
 
-#     with pytest.raises(ValueError):
-#         probe_gallery_distances(
-#             probe, gallery, dist="invalid_distance", use_torch=use_torch
-#         )
 
+@pytest.mark.parametrize("dist", ["l2", "l2_squared", "cosine"])
+def test_probe_gallery_torch_numpy_equality(dist):
+    """Results from use_torch=True and use_torch=False should match."""
+    rng = np.random.default_rng(42)
+    probe = rng.standard_normal((20, 8)).astype(np.float32)
+    gallery = rng.standard_normal((30, 8)).astype(np.float32)
+    probe_labels = rng.integers(0, 4, size=20)
+    gallery_labels = rng.integers(0, 4, size=30)
 
-# @pytest.mark.parametrize("dist", ["l2", "l2_squared", "cosine"])
-# def test_probe_gallery_torch_numpy_equality(dist):
-#     """Results from use_torch=True and use_torch=False should match."""
-#     rng = np.random.default_rng(42)
-#     probe = rng.standard_normal((20, 8)).astype(np.float32)
-#     gallery = rng.standard_normal((30, 8)).astype(np.float32)
+    args = (probe, gallery, probe_labels, gallery_labels)
+    kwargs = {"dist": dist, "return_indices": True}
 
-#     results_np = probe_gallery_distances(probe, gallery, dist=dist, use_torch=False)
-#     results_torch = probe_gallery_distances(probe, gallery, dist=dist, use_torch=True)
+    scores_np, indices_np = probe_gallery_distances(*args, **kwargs, use_torch=False)
+    scores_torch, indices_torch = probe_gallery_distances(
+        *args, **kwargs, use_torch=True
+    )
 
-#     np.testing.assert_allclose(results_np, results_torch, rtol=1e-6)
+    np.testing.assert_allclose(scores_np.neg_rank1, scores_torch.neg_rank1, rtol=1e-6)
+    np.testing.assert_allclose(scores_np.pos_rank1, scores_torch.pos_rank1, rtol=1e-6)
+    np.testing.assert_allclose(scores_np.pos_mate, scores_torch.pos_mate, rtol=1e-6)
+    np.testing.assert_equal(scores_np.pos_mate_rank, scores_torch.pos_mate_rank)
+    np.testing.assert_equal(scores_np.pos_label_rank, scores_torch.pos_label_rank)
+    np.testing.assert_equal(scores_np.neg_labels, scores_torch.neg_labels)
+    np.testing.assert_equal(scores_np.pos_labels, scores_torch.pos_labels)
+
+    np.testing.assert_equal(indices_np.neg_rank1, indices_torch.neg_rank1)
+    np.testing.assert_equal(indices_np.pos_rank1, indices_torch.pos_rank1)
+    np.testing.assert_equal(indices_np.pos_mate, indices_torch.pos_mate)
 
 
 # def test_probe_gallery_torch_dtype():

@@ -601,7 +601,7 @@ def probe_gallery_distances(
     batch_size: int | None = 1e8,
     use_torch: bool = False,
     torch_dtype: "torch.dtype | str" = "float32",
-) -> OneToNScores:
+) -> OneToNScores | tuple[OneToNScores, ProbeGalleryIndices]:
     """Compute distances from probe embeddings to gallery embeddings and return
     one-to-N matching scores.
 
@@ -622,6 +622,8 @@ def probe_gallery_distances(
         gallery_labels: Array of shape ``(G,)`` containing the label for each
             gallery embedding.
         dist: Distance metric. One of ``"l2_squared"``, ``"l2"`` or ``"cosine"``.
+        return_indices: If True, also return the probe and gallery indices for
+            the closest matches.
         batch_size: Maximum number of distances to keep in memory at once.
             Controls the probe batch size as ``batch_size // G``. If ``None``,
             all distances are computed at once.
@@ -630,7 +632,11 @@ def probe_gallery_distances(
             on supported GPUs for faster computation and reduced memory usage.
 
     Returns:
-        A ``OneToNScores`` object with the matching scores.
+        A ``OneToNScores`` object with the matching scores. Optionally returns a
+        ``ProbeGalleryIndices`` object with the corresponding indices of the closest
+        matches in the gallery. The indices are aligned to the order of the probes
+        in the returned ``OneToNScores`` object (which is different from the original
+        order of the probes).
     """
     probe = np.asarray(probe)
     if np.issubdtype(probe.dtype, np.integer):

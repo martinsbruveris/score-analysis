@@ -686,12 +686,14 @@ def _probe_gallery_distances_numpy(
     dist_fn = dist_fn_dict[dist]
 
     p = len(probe)
+    g = len(gallery)
 
     # Sort gallery by label so we can use reduceat for per-label min distances
     gallery_sort = np.argsort(gallery_labels)
     gallery = gallery[gallery_sort]
     gallery_labels = gallery_labels[gallery_sort]
     unique_labels, label_starts = np.unique(gallery_labels, return_index=True)
+    label_ends = np.append(label_starts[1:], len(gallery_labels))
 
     # Pre-allocate output arrays
     nb_neg = int(np.sum(~is_mated))
@@ -763,11 +765,20 @@ def _probe_gallery_distances_numpy(
                 mated_probe_idx = start + np.where(batch_mated)[0]
                 pos_rank1_idx[sl, 0] = mated_probe_idx
                 pos_rank1_idx[sl, 1] = gallery_sort[mated_dists.argmin(axis=1)]
-                # Mate gallery index: argmin among same-label gallery items
-                same_label = mated_probe_labels[:, None] == gallery_labels[None, :]
-                mate_argmin = np.argmin(
-                    np.where(same_label, mated_dists, np.inf), axis=1
-                )
+
+                # Mate gallery index: argmin within each probe's label group
+                group_start = label_starts[label_idx]  # (Pm,)
+                group_end = label_ends[label_idx]  # (Pm,)
+                # We allocate a matrix that works for the largest group
+                max_group_size = int((group_end - group_start).max())
+                col_idx = group_start[:, None] + np.arange(max_group_size)
+                # And mask out the invalid columns that go beyond a given group's end
+                valid = col_idx < group_end[:, None]
+                # Clip col_idx to avoid out-of-bounds indexing
+                col_idx = np.clip(col_idx, 0, g - 1)
+                group_dists = mated_dists[np.arange(nb_pos_batch)[:, None], col_idx]
+                group_dists = np.where(valid, group_dists, np.inf)
+                mate_argmin = group_start + np.argmin(group_dists, axis=1)
                 pos_mate_idx[sl, 0] = mated_probe_idx
                 pos_mate_idx[sl, 1] = gallery_sort[mate_argmin]
 

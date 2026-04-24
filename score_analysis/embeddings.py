@@ -3,6 +3,7 @@ Functions to compute distances and similarities between embeddings.
 """
 
 import warnings
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -583,6 +584,13 @@ def _embedding_distances_torch(
     return pos_dists, neg_dists, pos_idx, neg_idx
 
 
+@dataclass
+class ProbeGalleryIndices:
+    neg_rank1: np.ndarray
+    pos_rank1: np.ndarray
+    pos_mate: np.ndarray
+
+
 def probe_gallery_distances(
     probe: np.ndarray,
     gallery: np.ndarray,
@@ -590,8 +598,6 @@ def probe_gallery_distances(
     gallery_labels: np.ndarray,
     dist: str = "l2_squared",
     return_indices: bool = False,
-    return_topk: bool = False,
-    rank: int | None = None,
     batch_size: int | None = 1e8,
     use_torch: bool = False,
     torch_dtype: "torch.dtype | str" = "float32",
@@ -645,7 +651,7 @@ def probe_gallery_distances(
 
     is_mated = np.isin(probe_labels, gallery_labels)
 
-    return _probe_gallery_distances_numpy(
+    scores, indices = _probe_gallery_distances_numpy(
         probe=probe,
         gallery=gallery,
         probe_labels=probe_labels,
@@ -653,7 +659,11 @@ def probe_gallery_distances(
         is_mated=is_mated,
         dist=dist,
         row_batch_size=row_batch_size,
+        return_indices=return_indices,
     )
+    if return_indices:
+        return scores, indices
+    return scores
 
 
 def _probe_gallery_distances_numpy(
@@ -664,7 +674,8 @@ def _probe_gallery_distances_numpy(
     is_mated: np.ndarray,
     dist: str,
     row_batch_size: int,
-) -> OneToNScores:
+    return_indices: bool,
+) -> tuple[OneToNScores, ProbeGalleryIndices | None]:
     dist_fn_dict = {
         "l2_squared": l2_squared_matrix,
         "l2": l2_matrix,
@@ -694,6 +705,11 @@ def _probe_gallery_distances_numpy(
     neg_labels = np.empty(nb_neg, dtype=probe_labels.dtype)
     pos_labels = np.empty(nb_pos, dtype=probe_labels.dtype)
 
+    if return_indices:
+        neg_rank1_idx = np.empty((nb_neg, 2), dtype=np.intp)
+        pos_rank1_idx = np.empty((nb_pos, 2), dtype=np.intp)
+        pos_mate_idx = np.empty((nb_pos, 2), dtype=np.intp)
+
     neg_offset = 0  # Next index to write in neg_rank1/neg_labels
     pos_offset = 0  # Same for pos_... arrays
 
@@ -708,8 +724,12 @@ def _probe_gallery_distances_numpy(
         nb_neg_batch = int(neg_mask.sum())
         if nb_neg_batch > 0:
             sl = slice(neg_offset, neg_offset + nb_neg_batch)
-            neg_rank1[sl] = batch_dists[neg_mask].min(axis=1)
+            neg_dists = batch_dists[neg_mask]
+            neg_rank1[sl] = neg_dists.min(axis=1)
             neg_labels[sl] = batch_labels[neg_mask]
+            if return_indices:
+                neg_rank1_idx[sl, 0] = start + np.where(neg_mask)[0]
+                neg_rank1_idx[sl, 1] = gallery_sort[neg_dists.argmin(axis=1)]
             neg_offset += nb_neg_batch
 
         # Mated probes
@@ -739,9 +759,21 @@ def _probe_gallery_distances_numpy(
             # Label rank: number of unique labels with min distance < mate_dist, + 1
             pos_label_rank[sl] = np.sum(min_per_label < batch_mate[:, None], axis=1) + 1
 
+            if return_indices:
+                mated_probe_idx = start + np.where(batch_mated)[0]
+                pos_rank1_idx[sl, 0] = mated_probe_idx
+                pos_rank1_idx[sl, 1] = gallery_sort[mated_dists.argmin(axis=1)]
+                # Mate gallery index: argmin among same-label gallery items
+                same_label = mated_probe_labels[:, None] == gallery_labels[None, :]
+                mate_argmin = np.argmin(
+                    np.where(same_label, mated_dists, np.inf), axis=1
+                )
+                pos_mate_idx[sl, 0] = mated_probe_idx
+                pos_mate_idx[sl, 1] = gallery_sort[mate_argmin]
+
             pos_offset += nb_pos_batch
 
-    return OneToNScores(
+    scores = OneToNScores(
         neg_rank1=neg_rank1,
         pos_rank1=pos_rank1,
         pos_mate=pos_mate,
@@ -752,6 +784,21 @@ def _probe_gallery_distances_numpy(
         score_class="neg",
         equal_class="pos",
     )
+
+    if return_indices:
+        # OneToNScores sorts neg by neg_rank1 and pos by pos_mate; apply the
+        # same permutations to the index arrays.
+        neg_order = np.argsort(neg_rank1)
+        pos_order = np.argsort(pos_mate)
+        indices = ProbeGalleryIndices(
+            neg_rank1=neg_rank1_idx[neg_order],
+            pos_rank1=pos_rank1_idx[pos_order],
+            pos_mate=pos_mate_idx[pos_order],
+        )
+    else:
+        indices = None
+
+    return scores, indices
 
 
 def _probe_gallery_distances_torch(

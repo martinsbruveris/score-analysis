@@ -384,6 +384,31 @@ def test_probe_gallery_distances(use_torch, batch_size):
     assert scores == expected
 
 
+@pytest.mark.parametrize("use_torch", [False])
+@pytest.mark.parametrize("batch_size", [None, 4])
+def test_probe_gallery_distances_return_indices(use_torch, batch_size):
+    """Test basic probe-gallery distance calculations."""
+    kwargs = {"batch_size": batch_size, "use_torch": use_torch}
+
+    probe = [[0], [1], [2]]
+    gallery = [[5], [4], [3]]
+    probe_labels = [4, 5, 1]
+    gallery_labels = [1, 2, 2]
+
+    _, indices = probe_gallery_distances(
+        probe=probe,
+        gallery=gallery,
+        probe_labels=probe_labels,
+        gallery_labels=gallery_labels,
+        dist="l2",
+        return_indices=True,
+        **kwargs,
+    )
+    assert np.array_equal(indices.neg_rank1, [[1, 2], [0, 2]])
+    assert np.array_equal(indices.pos_rank1, [[2, 2]])
+    assert np.array_equal(indices.pos_mate, [[2, 0]])
+
+
 # @pytest.mark.parametrize("use_torch", [False, True])
 # def test_probe_gallery_invalid_distance(use_torch):
 #     """Test that an invalid distance metric raises an error."""

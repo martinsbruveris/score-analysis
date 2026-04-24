@@ -351,7 +351,7 @@ def test_cross_embedding_distances_indices(use_torch):
     assert np.array_equal(neg_idx, [[2, 0], [2, 1], [1, 2]])
 
 
-@pytest.mark.parametrize("use_torch", [False])
+@pytest.mark.parametrize("use_torch", [False, True])
 @pytest.mark.parametrize("batch_size", [None, 4])
 def test_probe_gallery_distances(use_torch, batch_size):
     """Test basic probe-gallery distance calculations."""
@@ -384,7 +384,7 @@ def test_probe_gallery_distances(use_torch, batch_size):
     assert scores == expected
 
 
-@pytest.mark.parametrize("use_torch", [False])
+@pytest.mark.parametrize("use_torch", [False, True])
 @pytest.mark.parametrize("batch_size", [None, 4])
 def test_probe_gallery_distances_return_indices(use_torch, batch_size):
     """Test basic probe-gallery distance calculations."""

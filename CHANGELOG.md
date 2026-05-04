@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.3.8 - 2026-05-04
+
+- Improved speed of `probe_gallery_distances` for PyTorch on GPU.
+
 ## v0.3.7 - 2026-04-24
 
 - Fix bug in batch size computation for `cross_embedding_distances`.

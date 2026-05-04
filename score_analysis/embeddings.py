@@ -933,7 +933,7 @@ def _batch_distances_numpy(
     # Label rank: number of unique labels with min distance < mate_dist
     label_rank = np.sum(min_per_label < batch_mate[:, None], axis=1) + 1
 
-    if return_indices:
+    if return_indices and nb_pos_batch > 0:
         # Mate gallery index: argmin within each probe's label group
         group_start = label_starts[label_idx]  # (Pm,)
         group_end = label_ends[label_idx]  # (Pm,)
@@ -947,6 +947,8 @@ def _batch_distances_numpy(
         group_dists = mated_dists[np.arange(nb_pos_batch)[:, None], col_idx]
         group_dists = np.where(valid, group_dists, np.inf)
         mate_argmin = group_start + np.argmin(group_dists, axis=1)
+    elif return_indices:
+        mate_argmin = np.empty(0, dtype=np.intp)
     else:
         mate_argmin = None
 
@@ -1024,7 +1026,7 @@ def _batch_distances_torch(
     # Label rank: number of unique labels with min distance < mate_dist
     label_rank = (min_per_label < batch_mate.unsqueeze(1)).sum(dim=1) + 1
 
-    if return_indices:
+    if return_indices and nb_pos_batch > 0:
         # Mate gallery index: argmin within each probe's label group
         group_start = label_starts[label_idx]  # (Pm,) on GPU
         group_end = label_ends[label_idx]  # (Pm,) on GPU
@@ -1038,6 +1040,8 @@ def _batch_distances_torch(
             valid, group_dists, torch.tensor(float("inf"), device=device)
         )
         mate_argmin = group_start + group_dists.argmin(dim=1)
+    elif return_indices:
+        mate_argmin = torch.empty(0, device=device, dtype=torch.long)
     else:
         mate_argmin = None
 

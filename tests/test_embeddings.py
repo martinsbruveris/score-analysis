@@ -454,41 +454,16 @@ def test_probe_gallery_torch_numpy_equality(dist):
     np.testing.assert_equal(indices_np.pos_mate, indices_torch.pos_mate)
 
 
-# def test_probe_gallery_torch_dtype():
-#     """Test that the use_torch option respects the dtype of the input embeddings."""
-#     rng = np.random.default_rng(42)
-#     probe = rng.standard_normal((10, 4)).astype(np.float64)
-#     gallery = rng.standard_normal((15, 4)).astype(np.float64)
+@pytest.mark.parametrize("use_torch", [False, True])
+@pytest.mark.parametrize("mated", [True, False])
+def test_probe_gallery_only_mated_or_non_mated(use_torch, mated):
+    """Test probe-gallery distances when only mated or non-mated probes are present."""
 
-#     results = probe_gallery_distances(
-#         probe, gallery, use_torch=True, torch_dtype="float32"
-#     )
-#     assert results.dtype == np.float64
-
-
-# @pytest.mark.parametrize("use_torch", [False, True])
-# @pytest.mark.parametrize("rank", [None, 1, 2])
-# def test_probe_gallery_distances_indices(use_torch, rank):
-#     """Test that return_indices returns the correct gallery indices."""
-#     probe = np.array([[0], [10]])
-#     gallery = np.array([[1], [4], [8]])
-
-#     result, indices = probe_gallery_distances(
-#         probe,
-#         gallery,
-#         dist="l2",
-#         batch_size=None,
-#         use_torch=use_torch,
-#         rank=rank,
-#         return_indices=True,
-#     )
-
-#     l2_matrix = np.array([[1, 4, 8], [2, 6, 9]])
-#     all_indices = np.array([[0, 1, 2], [2, 1, 0]])
-
-#     r = 3 if rank is None else rank
-#     expected_dists = l2_matrix[:, :r]
-#     expected_indices = all_indices[:, :r]
-
-#     assert np.array_equal(result, expected_dists)
-#     assert np.array_equal(indices, expected_indices)
+    probe_gallery_distances(
+            probe=[[0], [1], [2], [3]],
+            gallery=[[5], [4], [3]],
+            probe_labels=[0, 1, 2, 3],
+            gallery_labels=[0, 1, 2] if mated else [4, 5, 6],
+            batch_size=2,
+            use_torch=use_torch,
+        )

@@ -646,7 +646,6 @@ def probe_gallery_distances(
         in the returned ``OneToNScores`` object (which is different from the original
         order of the probes).
     """
-    import torch
 
     probe = np.asarray(probe)
     if np.issubdtype(probe.dtype, np.integer):
@@ -879,10 +878,12 @@ def _dist_matrix_torch(
         y_norm = torch.norm(y, dim=-1, keepdim=True)
         x = x / torch.clamp(x_norm, min=1e-10)
         y = y / torch.clamp(y_norm, min=1e-10)
-    else:
+    elif dist == "l2_squared":
         # Squared norm for l2 distances
         x_norm = (x**2).sum(dim=-1, keepdim=True)  # (N, 1)
         y_norm = (y**2).sum(dim=-1, keepdim=True)  # (N, 1)
+    else:
+        x_norm = y_norm = None
 
     return dist_fn(x, y, x_norm, y_norm)
 

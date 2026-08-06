@@ -17,6 +17,33 @@ if TYPE_CHECKING:  # pragma: no cover
     import torch
 
 
+# --- Note on the hard-pair pre-filter (referenced from both backends below) ---
+#
+# When pos_limit/neg_limit are set, we only ever keep the hardest K pairs, but the
+# naive implementation gathers *every* pair of each row block out of the distance
+# matrix before trimming. That boolean gather, not the trim itself, dominates the
+# runtime in the regime that matters (K much smaller than the number of pairs): for
+# 4e5 embeddings with neg_limit=1e-5, the gather and trim move 8e10 values in order to
+# retain 8e5 of them.
+#
+# We therefore track tau, the worst distance currently held in the buffer, and fold it
+# into the mask *before* the gather. Once the buffer holds K negatives that are all
+# <= tau, a pair with distance >= tau can never enter the hardest-K set, so it need not
+# be gathered at all. Positives are symmetric, with the comparison reversed, since the
+# hardest positives are the ones with the largest distances.
+#
+# The returned distances are unchanged. A candidate strictly worse than tau cannot
+# displace anything; a candidate exactly equal to tau could be swapped in, but only for
+# another value of exactly tau, so the multiset of returned distances is identical.
+# Ties can therefore change *which* index is reported when return_indices is True,
+# never a distance. Indices need no extra bookkeeping, because they are gathered with
+# the same mask as the distances.
+#
+# The filter has to be gated on "tau is not None" rather than on the buffer length: a
+# buffer is only trimmed once it grows *beyond* the limit, so a buffer sitting exactly
+# at the limit has no tau yet.
+
+
 def l2_squared_matrix(x, y):
     """Calculates all pairwise squared Euclidean distances between x and y.
 
@@ -111,6 +138,11 @@ def embedding_distances(
     number of pairs. If the limit is a float < 1, it specifies the fraction of pairs to
     keep. The actual number of pairs before limiting is stored in ``scores.nb_all_pos``
     and ``scores.nb_all_neg``.
+
+    Setting a limit also makes the computation faster, because pairs that cannot be
+    among the hardest ones are discarded without being materialized. The speed-up grows
+    as the limit gets tighter relative to the total number of pairs; a loose limit is
+    neither faster nor slower than no limit at all.
 
     Args:
         emb: Array of shape ``(N, D)`` containing ``N`` embeddings of dimension ``D``.
@@ -229,6 +261,11 @@ def cross_embedding_distances(
     number of pairs. If the limit is a float < 1, it specifies the fraction of pairs to
     keep. The actual number of pairs before limiting is stored in ``scores.nb_all_pos``
     and ``scores.nb_all_neg``.
+
+    Setting a limit also makes the computation faster, because pairs that cannot be
+    among the hardest ones are discarded without being materialized. The speed-up grows
+    as the limit gets tighter relative to the total number of pairs; a loose limit is
+    neither faster nor slower than no limit at all.
 
     Args:
         emb_a: Array of shape ``(N, D)`` containing ``N`` embeddings of dim ``D``.
@@ -360,6 +397,12 @@ def _embedding_distances_numpy(
     pos_idx = np.empty((0, 2), dtype=np.intp)
     neg_idx = np.empty((0, 2), dtype=np.intp)
 
+    # Worst (i.e. least hard) distance currently kept in each buffer, once that buffer
+    # has been trimmed to its limit. Used to pre-filter candidate pairs; see the
+    # note on the hard-pair pre-filter at the top of this module.
+    pos_tau = None
+    neg_tau = None
+
     for start in range(0, n, row_batch_size):
         end = min(start + row_batch_size, n)
         emb_col = emb_b[start:] if upper_triag_only else emb_b
@@ -380,6 +423,12 @@ def _embedding_distances_numpy(
 
         pos_mask = upper_mask & same_label
         neg_mask = upper_mask & ~same_label
+        # Drop candidates that cannot displace anything already kept; see the
+        # note on the hard-pair pre-filter at the top of this module.
+        if pos_tau is not None:
+            pos_mask = pos_mask & (batch_dists > pos_tau)
+        if neg_tau is not None:
+            neg_mask = neg_mask & (batch_dists < neg_tau)
         pos_batch = batch_dists[pos_mask]
         neg_batch = batch_dists[neg_mask]
 
@@ -401,6 +450,7 @@ def _embedding_distances_numpy(
                 pos_dists = pos_dists[keep]
                 if return_indices:
                     pos_idx = pos_idx[keep]
+                pos_tau = pos_dists.min()
 
         if len(neg_batch) > 0:
             neg_dists = np.concatenate([neg_dists, neg_batch])
@@ -412,6 +462,7 @@ def _embedding_distances_numpy(
                 neg_dists = neg_dists[keep]
                 if return_indices:
                     neg_idx = neg_idx[keep]
+                neg_tau = neg_dists.max()
 
     return pos_dists, neg_dists, pos_idx, neg_idx
 
@@ -514,6 +565,13 @@ def _embedding_distances_torch(
     pos_idx = torch.empty((0, 2), dtype=torch.long, device=device)
     neg_idx = torch.empty((0, 2), dtype=torch.long, device=device)
 
+    # Worst (i.e. least hard) distance currently kept in each buffer, once that buffer
+    # has been trimmed to its limit. Kept as 0-d device tensors, so that using them
+    # does not force a host-device synchronisation. See the note on the hard-pair
+    # pre-filter at the top of this module.
+    pos_tau = None
+    neg_tau = None
+
     with torch.inference_mode():
         for start in range(0, n, row_batch_size):
             end = min(start + row_batch_size, n)
@@ -542,6 +600,14 @@ def _embedding_distances_torch(
 
             pos_mask = upper_mask & same_label
             neg_mask = upper_mask & ~same_label
+            # Drop candidates that cannot displace anything already kept. This is
+            # where most of the time is saved: it removes them before the boolean
+            # gather below, not just before the topk. See the note on the hard-pair
+            # pre-filter at the top of this module.
+            if pos_tau is not None:
+                pos_mask = pos_mask & (batch_dists > pos_tau)
+            if neg_tau is not None:
+                neg_mask = neg_mask & (batch_dists < neg_tau)
             pos_batch = batch_dists[pos_mask]
             neg_batch = batch_dists[neg_mask]
 
@@ -558,25 +624,27 @@ def _embedding_distances_torch(
                     pos_idx = torch.cat([pos_idx, pos_idx_batch])
                 if pos_limit is not None and len(pos_dists) > pos_limit:
                     # Hardest positive pairs have the largest distances
-                    pos_dists, keep = torch.topk(pos_dists, pos_limit)
+                    pos_dists, keep = torch.topk(pos_dists, pos_limit, sorted=True)
                     if return_indices:
                         pos_idx = pos_idx[keep]
+                    # topk(sorted=True) returns descending order for largest=True.
+                    # Clone, so that tau does not keep the whole buffer alive.
+                    pos_tau = pos_dists[-1].clone()
 
             if len(neg_batch) > 0:
-                # There is a possible optimization: If neg_dists is already at
-                # neg_limit, we can filter neg_batch to distances smaller than the
-                # worst distance in neg_dists before concatenating. This saves some
-                # time in the topk step. We need to be careful to track indices
-                # correctly if return_indices is True. For simplicity, we skip this
-                # optimization for now (some benchmarks show it can save ~10-15%).
                 neg_dists = torch.cat([neg_dists, neg_batch])
                 if return_indices:
                     neg_idx = torch.cat([neg_idx, neg_idx_batch])
                 if neg_limit is not None and len(neg_dists) > neg_limit:
                     # Hardest negative pairs have the smallest distances
-                    neg_dists, keep = torch.topk(neg_dists, neg_limit, largest=False)
+                    neg_dists, keep = torch.topk(
+                        neg_dists, neg_limit, largest=False, sorted=True
+                    )
                     if return_indices:
                         neg_idx = neg_idx[keep]
+                    # topk(sorted=True) returns ascending order for largest=False.
+                    # Clone, so that tau does not keep the whole buffer alive.
+                    neg_tau = neg_dists[-1].clone()
 
     # Convert to numpy at the very end
     pos_dists = pos_dists.cpu().float().numpy().astype(input_dtype)

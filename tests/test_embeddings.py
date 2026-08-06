@@ -193,6 +193,210 @@ def test_embedding_distances_indices_limits(use_torch):
     assert np.array_equal(neg_idx, [[1, 2], [0, 2]])
 
 
+def _reference_hard_pairs(emb, labels, dist, pos_limit=None, neg_limit=None):
+    """Brute-force reference: all pairs, then keep the hardest ones.
+
+    Hardest positives are the ones with the largest distances, hardest negatives the
+    ones with the smallest distances. Returns sorted arrays.
+    """
+    emb = np.asarray(emb, dtype=np.float64)
+    labels = np.asarray(labels)
+    if dist == "l2_squared":
+        d = ((emb[:, None, :] - emb[None, :, :]) ** 2).sum(axis=-1)
+    elif dist == "l2":
+        d = np.sqrt(((emb[:, None, :] - emb[None, :, :]) ** 2).sum(axis=-1))
+    elif dist == "cosine":
+        normed = emb / np.clip(np.linalg.norm(emb, axis=1, keepdims=True), 1e-10, None)
+        d = 1.0 - normed @ normed.T
+    else:
+        raise ValueError(dist)
+
+    i, j = np.triu_indices(len(emb), k=1)
+    same = labels[i] == labels[j]
+    pos = np.sort(d[i, j][same])
+    neg = np.sort(d[i, j][~same])
+    if pos_limit is not None:
+        pos = pos[len(pos) - min(pos_limit, len(pos)) :]
+    if neg_limit is not None:
+        neg = neg[: min(neg_limit, len(neg))]
+    return pos, neg
+
+
+def _random_embeddings(n, dim, nb_labels, seed):
+    rng = np.random.default_rng(seed)
+    emb = rng.standard_normal((n, dim)).astype(np.float32)
+    labels = rng.integers(0, nb_labels, size=n)
+    return emb, labels
+
+
+@pytest.mark.parametrize("use_torch", [False, True])
+@pytest.mark.parametrize("dist", ["l2", "l2_squared", "cosine"])
+@pytest.mark.parametrize("batch_size", [None, 64, 4096])
+def test_embedding_distances_limits_are_exact(use_torch, dist, batch_size):
+    """Limited results must be exactly the hardest pairs, over several batchings.
+
+    Batching matters here: the hardest pairs are tracked incrementally across row
+    blocks, and candidates that cannot make the cut are discarded before being
+    materialized. This must not change the result.
+    """
+    emb, labels = _random_embeddings(n=60, dim=5, nb_labels=8, seed=11)
+    pos_limit, neg_limit = 7, 13
+
+    scores = embedding_distances(
+        emb,
+        labels,
+        dist=dist,
+        pos_limit=pos_limit,
+        neg_limit=neg_limit,
+        batch_size=batch_size,
+        use_torch=use_torch,
+    )
+    pos_ref, neg_ref = _reference_hard_pairs(emb, labels, dist, pos_limit, neg_limit)
+
+    np.testing.assert_allclose(np.sort(scores.pos), pos_ref, rtol=1e-5, atol=1e-6)
+    np.testing.assert_allclose(np.sort(scores.neg), neg_ref, rtol=1e-5, atol=1e-6)
+
+
+@pytest.mark.parametrize("use_torch", [False, True])
+@pytest.mark.parametrize("limit", list(range(1, 12)))
+def test_embedding_distances_limits_sweep(use_torch, limit):
+    """Sweep the limit, so that every buffer-vs-limit alignment is exercised.
+
+    In particular this covers the case where a buffer sits exactly at the limit
+    without having been trimmed, which is the boundary of the pre-filter.
+    """
+    # Integer embeddings, so that l2_squared distances are exactly representable
+    # and the reference comparison can be exact.
+    emb = np.array([[0], [1], [3], [7], [14], [15], [22], [30]], dtype=np.float32)
+    labels = np.array([0, 0, 1, 1, 1, 2, 2, 2])
+
+    scores = embedding_distances(
+        emb,
+        labels,
+        dist="l2_squared",
+        pos_limit=limit,
+        neg_limit=limit,
+        batch_size=8,  # forces several row blocks
+        use_torch=use_torch,
+    )
+    pos_ref, neg_ref = _reference_hard_pairs(emb, labels, "l2_squared", limit, limit)
+
+    assert np.array_equal(np.sort(scores.pos), pos_ref)
+    assert np.array_equal(np.sort(scores.neg), neg_ref)
+
+
+@pytest.mark.parametrize("use_torch", [False, True])
+def test_embedding_distances_limits_with_ties(use_torch):
+    """Ties at the cut-off must not change the returned distances.
+
+    Many pairs share the same distance here, so the hardest-K set is not unique.
+    Which pair is picked may vary, but the multiset of distances may not.
+    """
+    rng = np.random.default_rng(3)
+    # Only a handful of distinct embeddings, repeated -> heavy ties in the distances
+    distinct = np.arange(5, dtype=np.float32)[:, None]
+    emb = distinct[rng.integers(0, len(distinct), size=40)]
+    labels = rng.integers(0, 4, size=40)
+
+    for limit in [1, 3, 17, 40]:
+        scores = embedding_distances(
+            emb,
+            labels,
+            dist="l2_squared",
+            pos_limit=limit,
+            neg_limit=limit,
+            batch_size=16,
+            use_torch=use_torch,
+        )
+        pos_ref, neg_ref = _reference_hard_pairs(
+            emb, labels, "l2_squared", limit, limit
+        )
+        assert np.array_equal(np.sort(scores.pos), pos_ref)
+        assert np.array_equal(np.sort(scores.neg), neg_ref)
+
+
+@pytest.mark.parametrize("use_torch", [False, True])
+@pytest.mark.parametrize("limit", [None, 10**6])
+def test_embedding_distances_limits_never_binding(use_torch, limit):
+    """A limit larger than the number of pairs must return all pairs unchanged."""
+    emb, labels = _random_embeddings(n=40, dim=4, nb_labels=6, seed=5)
+
+    kwargs = {"dist": "l2", "batch_size": 64, "use_torch": use_torch}
+    unlimited = embedding_distances(emb, labels, **kwargs)
+    limited = embedding_distances(
+        emb, labels, pos_limit=limit, neg_limit=limit, **kwargs
+    )
+
+    assert np.array_equal(np.sort(unlimited.pos), np.sort(limited.pos))
+    assert np.array_equal(np.sort(unlimited.neg), np.sort(limited.neg))
+    assert limited.nb_easy_pos == 0
+    assert limited.nb_easy_neg == 0
+
+
+@pytest.mark.parametrize("use_torch", [False, True])
+def test_embedding_distances_limits_indices_are_consistent(use_torch):
+    """Returned indices must point at pairs that really have the returned distances.
+
+    Candidates are dropped by narrowing the mask that gathers both the distances and
+    the indices, so the two must stay aligned. Ties may change which of several equal
+    pairs is reported, hence the check is that the reported pair reproduces the
+    reported distance, not that the indices match a fixed list.
+    """
+    emb, labels = _random_embeddings(n=50, dim=4, nb_labels=7, seed=17)
+    pos_limit, neg_limit = 6, 9
+
+    scores, pos_idx, neg_idx = embedding_distances(
+        emb,
+        labels,
+        dist="l2_squared",
+        pos_limit=pos_limit,
+        neg_limit=neg_limit,
+        batch_size=64,
+        use_torch=use_torch,
+        return_indices=True,
+    )
+
+    full = ((emb[:, None, :] - emb[None, :, :]) ** 2).sum(axis=-1)
+    for idx, dists, expect_same_label in [
+        (pos_idx, scores.pos, True),
+        (neg_idx, scores.neg, False),
+    ]:
+        assert len(idx) == len(dists)
+        rows, cols = idx[:, 0], idx[:, 1]
+        assert np.all(rows < cols)  # upper triangle only
+        np.testing.assert_allclose(full[rows, cols], dists, rtol=1e-5, atol=1e-6)
+        assert np.all((labels[rows] == labels[cols]) == expect_same_label)
+
+
+@pytest.mark.parametrize("use_torch", [False, True])
+@pytest.mark.parametrize("batch_size", [None, 64])
+def test_cross_embedding_distances_limits_are_exact(use_torch, batch_size):
+    """The same exactness requirement for the two-sided variant."""
+    emb_a, labels_a = _random_embeddings(n=30, dim=4, nb_labels=5, seed=21)
+    emb_b, labels_b = _random_embeddings(n=25, dim=4, nb_labels=5, seed=22)
+    pos_limit, neg_limit = 5, 11
+
+    scores = cross_embedding_distances(
+        emb_a,
+        emb_b,
+        labels_a,
+        labels_b,
+        dist="l2_squared",
+        pos_limit=pos_limit,
+        neg_limit=neg_limit,
+        batch_size=batch_size,
+        use_torch=use_torch,
+    )
+
+    full = ((emb_a[:, None, :] - emb_b[None, :, :]) ** 2).sum(axis=-1).ravel()
+    same = (labels_a[:, None] == labels_b[None, :]).ravel()
+    pos_ref = np.sort(full[same])[-pos_limit:]
+    neg_ref = np.sort(full[~same])[:neg_limit]
+
+    np.testing.assert_allclose(np.sort(scores.pos), pos_ref, rtol=1e-5, atol=1e-6)
+    np.testing.assert_allclose(np.sort(scores.neg), neg_ref, rtol=1e-5, atol=1e-6)
+
+
 @pytest.mark.parametrize("use_torch", [False, True])
 def test_cross_embedding_distances(use_torch):
     """Test basic embedding distance calculations."""
@@ -460,10 +664,10 @@ def test_probe_gallery_only_mated_or_non_mated(use_torch, mated):
     """Test probe-gallery distances when only mated or non-mated probes are present."""
 
     probe_gallery_distances(
-            probe=[[0], [1], [2], [3]],
-            gallery=[[5], [4], [3]],
-            probe_labels=[0, 1, 2, 3],
-            gallery_labels=[0, 1, 2] if mated else [4, 5, 6],
-            batch_size=2,
-            use_torch=use_torch,
-        )
+        probe=[[0], [1], [2], [3]],
+        gallery=[[5], [4], [3]],
+        probe_labels=[0, 1, 2, 3],
+        gallery_labels=[0, 1, 2] if mated else [4, 5, 6],
+        batch_size=2,
+        use_torch=use_torch,
+    )

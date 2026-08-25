@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.3.10 - 2026-08-25
+
+- Parameter `dist` can be a callable in embedding distance computation.
+
 ## v0.3.9 - 2026-08-06
 
 - Improved speed for `cross_embedding_distances`.

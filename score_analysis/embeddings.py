@@ -5,8 +5,9 @@ Functions to compute distances and similarities between embeddings.
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -15,6 +16,9 @@ from .scores import Scores
 
 if TYPE_CHECKING:  # pragma: no cover
     import torch
+
+
+DistanceFunction = Callable[[Any, Any], Any]
 
 
 # --- Note on the hard-pair pre-filter (referenced from both backends below) ---
@@ -118,7 +122,7 @@ def cosine_matrix(x, y):
 def embedding_distances(
     emb: np.ndarray,
     labels: np.ndarray,
-    dist: str = "l2_squared",
+    dist: str | DistanceFunction = "l2_squared",
     pos_limit: int | float | None = None,
     neg_limit: int | float | None = None,
     batch_size: int | None = 1e8,
@@ -147,7 +151,11 @@ def embedding_distances(
     Args:
         emb: Array of shape ``(N, D)`` containing ``N`` embeddings of dimension ``D``.
         labels: Array of shape ``(N,)`` containing the label for each embedding.
-        dist: Distance metric to use. One of ``"l2_squared"``, ``"l2"`` or ``"cosine"``.
+        dist: Distance metric to use. One of ``"l2_squared"``, ``"l2"`` or
+            ``"cosine"``, or a callable that accepts two embedding matrices of shape
+            ``(N, D)`` and ``(M, D)`` and returns their pairwise distance matrix of
+            shape ``(N, M)``. The function will be called with either numpy arrays or
+            torch tensors depeding on ``use_torch``.
         pos_limit: Maximum number (or fraction) of positive pairs to return.
         neg_limit: Maximum number (or fraction) of negative pairs to return.
         batch_size: Process embeddings in batches to limit memory usage. If ``None``,
@@ -241,7 +249,7 @@ def cross_embedding_distances(
     emb_b: np.ndarray,
     labels_a: np.ndarray,
     labels_b: np.ndarray,
-    dist: str = "l2_squared",
+    dist: str | DistanceFunction = "l2_squared",
     pos_limit: int | float | None = None,
     neg_limit: int | float | None = None,
     batch_size: int | None = 1e8,
@@ -272,7 +280,11 @@ def cross_embedding_distances(
         emb_b: Array of shape ``(M, D)`` containing ``M`` embeddings of dim ``D``.
         labels_a: Array of shape ``(N,)`` containing the label for ``emb_a``.
         labels_b: Array of shape ``(M,)`` containing the label for ``emb_b``.
-        dist: Distance metric to use. One of ``"l2_squared"``, ``"l2"`` or ``"cosine"``.
+        dist: Distance metric to use. One of ``"l2_squared"``, ``"l2"`` or
+            ``"cosine"``, or a callable that accepts two embedding matrices of shape
+            ``(N, D)`` and ``(M, D)`` and returns their pairwise distance matrix of
+            shape ``(N, M)``. The function will be called with either numpy arrays or
+            torch tensors depeding on ``use_torch``.
         pos_limit: Maximum number (or fraction) of positive pairs to return.
         neg_limit: Maximum number (or fraction) of negative pairs to return.
         batch_size: Process embeddings in batches to limit memory usage. If ``None``,
@@ -373,7 +385,7 @@ def _embedding_distances_numpy(
     emb_b: np.ndarray,
     labels_a: np.ndarray,
     labels_b: np.ndarray,
-    dist: str,
+    dist: str | DistanceFunction,
     upper_triag_only: bool,
     pos_limit: int | None,
     neg_limit: int | None,
@@ -385,9 +397,12 @@ def _embedding_distances_numpy(
         "l2": l2_matrix,
         "cosine": cosine_matrix,
     }
-    if dist not in dist_fn_dict:
-        raise ValueError(f"Unknown distance: {dist}")
-    dist_fn = dist_fn_dict[dist]
+    if callable(dist):
+        dist_fn = dist
+    else:
+        if dist not in dist_fn_dict:
+            raise ValueError(f"Unknown distance: {dist}")
+        dist_fn = dist_fn_dict[dist]
 
     n = len(emb_a)
     m = len(emb_b)
@@ -505,7 +520,7 @@ def _embedding_distances_torch(
     emb_b: np.ndarray,
     labels_a: np.ndarray,
     labels_b: np.ndarray,
-    dist: str,
+    dist: str | DistanceFunction,
     upper_triag_only: bool,
     pos_limit: int | None,
     neg_limit: int | None,
@@ -532,9 +547,15 @@ def _embedding_distances_torch(
         "l2": _l2_matrix,
         "cosine": _cosine_matrix,
     }
-    if dist not in dist_fn_dict:
-        raise ValueError(f"Unknown distance: {dist}")
-    dist_fn = dist_fn_dict[dist]
+    if callable(dist):
+
+        def dist_fn(x, y, _x_n, _y_n):
+            return dist(x, y)
+
+    else:
+        if dist not in dist_fn_dict:
+            raise ValueError(f"Unknown distance: {dist}")
+        dist_fn = dist_fn_dict[dist]
 
     input_dtype = emb_a.dtype
     device = _get_torch_device()
@@ -672,7 +693,7 @@ def probe_gallery_distances(
     gallery: np.ndarray,
     probe_labels: np.ndarray,
     gallery_labels: np.ndarray,
-    dist: str = "l2_squared",
+    dist: str | DistanceFunction = "l2_squared",
     return_indices: bool = False,
     batch_size: int | None = 1e8,
     use_torch: bool = False,
@@ -697,7 +718,11 @@ def probe_gallery_distances(
             probe embedding.
         gallery_labels: Array of shape ``(G,)`` containing the label for each
             gallery embedding.
-        dist: Distance metric. One of ``"l2_squared"``, ``"l2"`` or ``"cosine"``.
+        dist: Distance metric to use. One of ``"l2_squared"``, ``"l2"`` or
+            ``"cosine"``, or a callable that accepts two embedding matrices of shape
+            ``(N, D)`` and ``(M, D)`` and returns their pairwise distance matrix of
+            shape ``(N, M)``. The function will be called with either numpy arrays or
+            torch tensors depeding on ``use_torch``.
         return_indices: If True, also return the probe and gallery indices for
             the closest matches.
         batch_size: Maximum number of distances to keep in memory at once.
@@ -900,23 +925,26 @@ def probe_gallery_distances(
 def _dist_matrix_numpy(
     x: np.ndarray,
     y: np.ndarray,
-    dist: str,
+    dist: str | DistanceFunction,
 ) -> np.ndarray:
     dist_fn_dict = {
         "l2_squared": l2_squared_matrix,
         "l2": l2_matrix,
         "cosine": cosine_matrix,
     }
-    if dist not in dist_fn_dict:
-        raise ValueError(f"Unknown distance: {dist}")
-    dist_fn = dist_fn_dict[dist]
+    if callable(dist):
+        dist_fn = dist
+    else:
+        if dist not in dist_fn_dict:
+            raise ValueError(f"Unknown distance: {dist}")
+        dist_fn = dist_fn_dict[dist]
     return dist_fn(x, y)
 
 
 def _dist_matrix_torch(
     x: torch.Tensor,
     y: torch.Tensor,
-    dist: str,
+    dist: str | DistanceFunction,
 ) -> torch.Tensor:
     import torch
 
@@ -937,6 +965,9 @@ def _dist_matrix_torch(
         "l2": _l2_matrix,
         "cosine": _cosine_matrix,
     }
+    if callable(dist):
+        return dist(x, y)
+
     if dist not in dist_fn_dict:
         raise ValueError(f"Unknown distance: {dist}")
     dist_fn = dist_fn_dict[dist]
@@ -966,7 +997,7 @@ def _batch_distances_numpy(
     label_starts: np.ndarray,
     label_ends: np.ndarray,
     nb_labels: int,
-    dist: str,
+    dist: str | DistanceFunction,
     input_dtype,
     return_indices: bool,
 ) -> tuple[np.ndarray, ...]:
@@ -1043,7 +1074,7 @@ def _batch_distances_torch(
     label_starts: torch.Tensor,
     label_ends: torch.Tensor,
     nb_labels: int,
-    dist: str,
+    dist: str | DistanceFunction,
     input_dtype,
     return_indices: bool,
 ) -> tuple[np.ndarray, ...]:

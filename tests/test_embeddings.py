@@ -36,6 +36,22 @@ def test_embedding_distances(use_torch):
 
 
 @pytest.mark.parametrize("use_torch", [False, True])
+def test_embedding_distances_callable(use_torch):
+    def manhattan(x, y):
+        return abs(x[:, None, :] - y[None, :, :]).sum(axis=-1)
+
+    emb = np.array([[1], [2], [4], [7]])
+    labels = np.array([0, 0, 1, 1])
+
+    scores = embedding_distances(
+        emb, labels, dist=manhattan, batch_size=4, use_torch=use_torch
+    )
+
+    assert np.array_equal(scores.pos, [1, 3])
+    assert np.array_equal(scores.neg, [2, 3, 5, 6])
+
+
+@pytest.mark.parametrize("use_torch", [False, True])
 def test_embedding_distances_limits(use_torch):
     """
     Test embedding distance calculations with limits on positive and negative pairs.
@@ -428,6 +444,25 @@ def test_cross_embedding_distances(use_torch):
 
 
 @pytest.mark.parametrize("use_torch", [False, True])
+def test_cross_embedding_distances_callable(use_torch):
+    def manhattan(x, y):
+        return abs(x[:, None, :] - y[None, :, :]).sum(axis=-1)
+
+    scores = cross_embedding_distances(
+        emb_a=[[1], [4]],
+        emb_b=[[2], [7]],
+        labels_a=[0, 1],
+        labels_b=[0, 1],
+        dist=manhattan,
+        batch_size=2,
+        use_torch=use_torch,
+    )
+
+    assert np.array_equal(scores.pos, [1, 3])
+    assert np.array_equal(scores.neg, [2, 6])
+
+
+@pytest.mark.parametrize("use_torch", [False, True])
 def test_cross_embedding_distances_limits(use_torch):
     """
     Test embedding distance calculations with limits on positive and negative pairs.
@@ -587,6 +622,26 @@ def test_probe_gallery_distances(use_torch, batch_size):
         equal_class="pos",
     )
     assert scores == expected
+
+
+@pytest.mark.parametrize("use_torch", [False, True])
+def test_probe_gallery_distances_callable(use_torch):
+    def manhattan(x, y):
+        return abs(x[:, None, :] - y[None, :, :]).sum(axis=-1)
+
+    scores = probe_gallery_distances(
+        probe=[[0], [4]],
+        gallery=[[5], [3]],
+        probe_labels=[2, 1],
+        gallery_labels=[1, 2],
+        dist=manhattan,
+        batch_size=2,
+        use_torch=use_torch,
+    )
+
+    assert np.array_equal(scores.pos_rank1, [1, 3])
+    assert np.array_equal(scores.pos_mate, [1, 3])
+    assert np.array_equal(scores.pos_mate_rank, [1, 1])
 
 
 @pytest.mark.parametrize("use_torch", [False, True])

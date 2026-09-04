@@ -3,12 +3,14 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, Union, TypeVar
 
 import numpy as np
 
 from . import utils
 from .cm import ConfusionMatrix
+
+T = TypeVar("T", float, np.ndarray)
 
 
 class BinaryLabel(Enum):
@@ -340,27 +342,27 @@ class Scores:
 
     confusion_matrix = cm
 
-    def tpr(self, threshold):
+    def tpr(self, threshold: T) -> T:
         """True Positive Rate at threshold(s)."""
         return self.cm(threshold).tpr()
 
-    def fnr(self, threshold):
+    def fnr(self, threshold: T) -> T:
         """False Negative Rate at threshold(s)."""
         return self.cm(threshold).fnr()
 
-    def tnr(self, threshold):
+    def tnr(self, threshold: T) -> T:
         """True Negative Rate at threshold(s)."""
         return self.cm(threshold).tnr()
 
-    def fpr(self, threshold):
+    def fpr(self, threshold: T) -> T:
         """False Positive Rate at threshold(s)."""
         return self.cm(threshold).fpr()
 
-    def topr(self, threshold):
+    def topr(self, threshold: T) -> T:
         """Test Outcome Positive Rate at threshold(s)."""
         return self.cm(threshold).topr()
 
-    def tonr(self, threshold):
+    def tonr(self, threshold: T) -> T:
         """Test Outcome Negative Rate at threshold(s)."""
         return self.cm(threshold).tonr()
 
@@ -542,11 +544,11 @@ class Scores:
     def _threshold_at_ratio(
         self,
         scores,
-        target_ratio,
+        target_ratio: T,
         increasing: bool,
         ratio_class: BinaryLabel,
         method: str,
-    ):
+    ) -> T:
         """
         Helper function to set the threshold at a specific metric, for metrics that
         are defined as ratios, such as TPR, FPR, TNR and FNR.

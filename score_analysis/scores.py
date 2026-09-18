@@ -3,12 +3,14 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
 
 from . import utils
 from .cm import ConfusionMatrix
+
+T = TypeVar("T", float, np.ndarray)
 
 
 class BinaryLabel(Enum):
@@ -340,27 +342,27 @@ class Scores:
 
     confusion_matrix = cm
 
-    def tpr(self, threshold):
+    def tpr(self, threshold: T) -> T:
         """True Positive Rate at threshold(s)."""
         return self.cm(threshold).tpr()
 
-    def fnr(self, threshold):
+    def fnr(self, threshold: T) -> T:
         """False Negative Rate at threshold(s)."""
         return self.cm(threshold).fnr()
 
-    def tnr(self, threshold):
+    def tnr(self, threshold: T) -> T:
         """True Negative Rate at threshold(s)."""
         return self.cm(threshold).tnr()
 
-    def fpr(self, threshold):
+    def fpr(self, threshold: T) -> T:
         """False Positive Rate at threshold(s)."""
         return self.cm(threshold).fpr()
 
-    def topr(self, threshold):
+    def topr(self, threshold: T) -> T:
         """Test Outcome Positive Rate at threshold(s)."""
         return self.cm(threshold).topr()
 
-    def tonr(self, threshold):
+    def tonr(self, threshold: T) -> T:
         """Test Outcome Negative Rate at threshold(s)."""
         return self.cm(threshold).tonr()
 
@@ -413,7 +415,7 @@ class Scores:
         """
         return self.tonr(threshold)
 
-    def threshold_at_tpr(self, tpr, *, method: str = "linear"):
+    def threshold_at_tpr(self, tpr: T, *, method: str = "linear") -> T:
         """
         Set threshold at True Positive Rate.
 
@@ -433,7 +435,7 @@ class Scores:
         tpr = np.minimum(tpr / self.hard_pos_ratio, 1.0)
         return self._threshold_at_ratio(self.pos, tpr, False, BinaryLabel.pos, method)
 
-    def threshold_at_fnr(self, fnr, *, method: str = "linear"):
+    def threshold_at_fnr(self, fnr: T, *, method: str = "linear") -> T:
         """
         Set threshold at False Negative Rate.
 
@@ -451,7 +453,7 @@ class Scores:
         fnr = np.minimum(np.asarray(fnr) / self.hard_pos_ratio, 1.0)
         return self._threshold_at_ratio(self.pos, fnr, True, BinaryLabel.pos, method)
 
-    def threshold_at_tnr(self, tnr, *, method: str = "linear"):
+    def threshold_at_tnr(self, tnr: T, *, method: str = "linear") -> T:
         """
         Set threshold at True Negative Rate.
 
@@ -469,7 +471,7 @@ class Scores:
         tnr = np.minimum(tnr / self.hard_neg_ratio, 1.0)
         return self._threshold_at_ratio(self.neg, tnr, True, BinaryLabel.neg, method)
 
-    def threshold_at_fpr(self, fpr, *, method: str = "linear"):
+    def threshold_at_fpr(self, fpr: T, *, method: str = "linear") -> T:
         """
         Set threshold at False Positive Rate.
 
@@ -486,7 +488,7 @@ class Scores:
         fpr = np.minimum(np.asarray(fpr) / self.hard_neg_ratio, 1.0)
         return self._threshold_at_ratio(self.neg, fpr, False, BinaryLabel.neg, method)
 
-    def threshold_at_topr(self, topr, *, method: str = "linear"):
+    def threshold_at_topr(self, topr: T, *, method: str = "linear") -> T:
         """
         Set threshold at Test Outcome Positive Rate.
 
@@ -511,7 +513,7 @@ class Scores:
             concat_scores, topr, False, BinaryLabel.pos, method
         )
 
-    def threshold_at_tonr(self, tonr, *, method: str = "linear"):
+    def threshold_at_tonr(self, tonr: T, *, method: str = "linear") -> T:
         """
         Set threshold at Test Outcome Negative Rate.
 
@@ -542,11 +544,11 @@ class Scores:
     def _threshold_at_ratio(
         self,
         scores,
-        target_ratio,
+        target_ratio: T,
         increasing: bool,
         ratio_class: BinaryLabel,
         method: str,
-    ):
+    ) -> T:
         """
         Helper function to set the threshold at a specific metric, for metrics that
         are defined as ratios, such as TPR, FPR, TNR and FNR.

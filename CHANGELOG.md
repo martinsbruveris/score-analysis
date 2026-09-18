@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.3.11 - 2026-09-18
+
+- Improved typehints.
+
 ## v0.3.10 - 2026-08-25
 
 - Parameter `dist` can be a callable in embedding distance computation.

@@ -440,9 +440,13 @@ def _embedding_distances_numpy(
         neg_mask = upper_mask & ~same_label
         # Drop candidates that cannot displace anything already kept; see the
         # note on the hard-pair pre-filter at the top of this module.
-        if pos_tau is not None:
+        if pos_limit == 0:
+            pos_mask = pos_mask & False
+        elif pos_tau is not None:
             pos_mask = pos_mask & (batch_dists > pos_tau)
-        if neg_tau is not None:
+        if neg_limit == 0:
+            neg_mask = neg_mask & False
+        elif neg_tau is not None:
             neg_mask = neg_mask & (batch_dists < neg_tau)
         pos_batch = batch_dists[pos_mask]
         neg_batch = batch_dists[neg_mask]
@@ -625,9 +629,13 @@ def _embedding_distances_torch(
             # where most of the time is saved: it removes them before the boolean
             # gather below, not just before the topk. See the note on the hard-pair
             # pre-filter at the top of this module.
-            if pos_tau is not None:
+            if pos_limit == 0:
+                pos_mask = pos_mask & False
+            elif pos_tau is not None:
                 pos_mask = pos_mask & (batch_dists > pos_tau)
-            if neg_tau is not None:
+            if neg_limit == 0:
+                neg_mask = neg_mask & False
+            elif neg_tau is not None:
                 neg_mask = neg_mask & (batch_dists < neg_tau)
             pos_batch = batch_dists[pos_mask]
             neg_batch = batch_dists[neg_mask]

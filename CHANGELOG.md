@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.3.12 - 2026-09-19
+
+- Fixing bug introduced in v0.3.9 with empty positive or negative slices in embeddings.
+
 ## v0.3.11 - 2026-09-18
 
 - Improved typehints.

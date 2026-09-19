@@ -75,6 +75,66 @@ def test_embedding_distances_limits(use_torch):
 
 
 @pytest.mark.parametrize("use_torch", [False, True])
+def test_embedding_distances_negative_fractional_limit_rounds_to_zero(use_torch):
+    embeddings = np.eye(4, dtype=np.float32)
+    labels = np.arange(len(embeddings))
+
+    scores = embedding_distances(
+        emb=embeddings,
+        labels=labels,
+        dist="cosine",
+        neg_limit=1e-4,
+        use_torch=use_torch,
+    )
+
+    assert scores.nb_hard_neg == 0
+    assert scores.nb_all_neg == 6
+
+    scores = cross_embedding_distances(
+        emb_a=embeddings,
+        emb_b=embeddings,
+        labels_a=labels,
+        labels_b=labels,
+        dist="cosine",
+        neg_limit=1e-4,
+        use_torch=use_torch,
+    )
+
+    assert scores.nb_hard_neg == 0
+    assert scores.nb_all_neg == 12
+
+
+@pytest.mark.parametrize("use_torch", [False, True])
+def test_embedding_distances_positive_fractional_limit_rounds_to_zero(use_torch):
+    embeddings = np.eye(4, dtype=np.float32)
+    labels = np.zeros(len(embeddings), dtype=int)
+
+    scores = embedding_distances(
+        emb=embeddings,
+        labels=labels,
+        dist="cosine",
+        pos_limit=1e-4,
+        use_torch=use_torch,
+    )
+
+    assert scores.nb_hard_pos == 0
+    assert scores.nb_all_pos == 6
+
+    scores = cross_embedding_distances(
+        emb_a=embeddings,
+        emb_b=embeddings,
+        labels_a=labels,
+        labels_b=labels,
+        dist="cosine",
+        pos_limit=1e-4,
+        use_torch=use_torch,
+    )
+
+    assert scores.nb_hard_pos == 0
+    assert scores.nb_all_pos == 16
+
+
+@pytest.mark.parametrize("use_torch", [False, True])
 def test_embedding_invalid_distance(use_torch):
     """Test that an invalid distance metric raises an error."""
     emb = np.array([[1], [2], [3]])
